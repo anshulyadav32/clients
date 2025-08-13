@@ -6,7 +6,7 @@ import { UserId } from "@bitwarden/common/types/guid";
 import { KdfConfigService } from "@bitwarden/key-management";
 import { LogService } from "@bitwarden/logging";
 
-import { ChangeKdfServiceAbstraction } from "../kdf/abstractions/change-kdf-service";
+import { ChangeKdfService } from "../kdf/change-kdf-service.abstraction";
 import { MasterPasswordServiceAbstraction } from "../master-password/abstractions/master-password.service.abstraction";
 
 import { DefaultEncryptedMigrator } from "./default-encrypted-migrator";
@@ -17,7 +17,7 @@ jest.mock("./migrations/minimum-kdf-migration");
 
 describe("EncryptedMigrator", () => {
   const mockKdfConfigService = mock<KdfConfigService>();
-  const mockChangeKdfService = mock<ChangeKdfServiceAbstraction>();
+  const mockChangeKdfService = mock<ChangeKdfService>();
   const mockLogService = mock<LogService>();
   const configService = mock<ConfigService>();
   const masterPasswordService = mock<MasterPasswordServiceAbstraction>();
@@ -57,17 +57,17 @@ describe("EncryptedMigrator", () => {
 
   describe("runMigrations", () => {
     it("should throw error when userId is null", async () => {
-      await expect(sut.runMigrations(null as any)).rejects.toThrow("userId");
+      await expect(sut.runMigrations(null as any, null)).rejects.toThrow("userId");
     });
 
     it("should throw error when userId is undefined", async () => {
-      await expect(sut.runMigrations(undefined as any)).rejects.toThrow("userId");
+      await expect(sut.runMigrations(undefined as any, null)).rejects.toThrow("userId");
     });
 
     it("should not run migration when needsMigration returns 'noMigrationNeeded'", async () => {
       mockMigration.needsMigration.mockResolvedValue("noMigrationNeeded");
 
-      await sut.runMigrations(mockUserId);
+      await sut.runMigrations(mockUserId, null);
 
       expect(mockMigration.needsMigration).toHaveBeenCalledWith(mockUserId);
       expect(mockMigration.runMigrations).not.toHaveBeenCalled();
@@ -91,13 +91,10 @@ describe("EncryptedMigrator", () => {
       expect(mockMigration.runMigrations).toHaveBeenCalledWith(mockUserId, mockMasterPassword);
     });
 
-    it("should throw error when migration needs master password but none is provided", async () => {
+    it("should return when migration needs master password but none is provided", async () => {
       mockMigration.needsMigration.mockResolvedValue("needsMigrationWithMasterPassword");
 
-      await expect(sut.runMigrations(mockUserId)).rejects.toThrow(
-        "Master password is required to run migrations",
-      );
-
+      await sut.runMigrations(mockUserId, null);
       expect(mockMigration.needsMigration).toHaveBeenCalledWith(mockUserId);
       expect(mockMigration.runMigrations).not.toHaveBeenCalled();
     });
@@ -105,21 +102,7 @@ describe("EncryptedMigrator", () => {
     it("should throw error when migration needs master password but null is provided", async () => {
       mockMigration.needsMigration.mockResolvedValue("needsMigrationWithMasterPassword");
 
-      await expect(sut.runMigrations(mockUserId, null)).rejects.toThrow(
-        "Master password is required to run migrations",
-      );
-
-      expect(mockMigration.needsMigration).toHaveBeenCalledWith(mockUserId);
-      expect(mockMigration.runMigrations).not.toHaveBeenCalled();
-    });
-
-    it("should throw error when migration needs master password but empty string is provided", async () => {
-      mockMigration.needsMigration.mockResolvedValue("needsMigrationWithMasterPassword");
-
-      await expect(sut.runMigrations(mockUserId, "")).rejects.toThrow(
-        "Master password is required to run migrations",
-      );
-
+      await sut.runMigrations(mockUserId, null);
       expect(mockMigration.needsMigration).toHaveBeenCalledWith(mockUserId);
       expect(mockMigration.runMigrations).not.toHaveBeenCalled();
     });

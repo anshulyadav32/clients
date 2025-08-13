@@ -5,6 +5,7 @@ import { ConfigService } from "@bitwarden/common/platform/abstractions/config/co
 import { UserId } from "@bitwarden/common/types/guid";
 // eslint-disable-next-line no-restricted-imports
 import {
+  Argon2KdfConfig,
   KdfConfigService,
   KdfType,
   MINIMUM_PBKDF2_ITERATIONS_FOR_UPGRADE,
@@ -12,14 +13,14 @@ import {
 } from "@bitwarden/key-management";
 import { LogService } from "@bitwarden/logging";
 
-import { ChangeKdfServiceAbstraction } from "../../kdf/abstractions/change-kdf-service";
+import { ChangeKdfService } from "../../kdf/change-kdf-service.abstraction";
 import { MasterPasswordServiceAbstraction } from "../../master-password/abstractions/master-password.service.abstraction";
 
 import { MinimumKdfMigration } from "./minimum-kdf-migration";
 
 describe("MinimumKdfMigration", () => {
   const mockKdfConfigService = mock<KdfConfigService>();
-  const mockChangeKdfService = mock<ChangeKdfServiceAbstraction>();
+  const mockChangeKdfService = mock<ChangeKdfService>();
   const mockLogService = mock<LogService>();
   const mockConfigService = mock<ConfigService>();
   const mockMasterPasswordService = mock<MasterPasswordServiceAbstraction>();
@@ -42,18 +43,17 @@ describe("MinimumKdfMigration", () => {
   });
 
   describe("needsMigration", () => {
-    it("should return 'noMigrationNeeded' when user is not using PBKDF2", async () => {
-      const mockKdfConfig = {
-        kdfType: KdfType.Argon2id,
-        iterations: 100000,
-      };
-      mockKdfConfigService.getKdfConfig.mockResolvedValue(mockKdfConfig as any);
-      mockConfigService.getFeatureFlag.mockResolvedValue(true);
-
+    it("should return 'noMigrationNeeded' when user does not have a master password`", async () => {
+      mockMasterPasswordService.userHasMasterPassword.mockResolvedValue(false);
       const result = await sut.needsMigration(mockUserId);
-
       expect(result).toBe("noMigrationNeeded");
-      expect(mockKdfConfigService.getKdfConfig).toHaveBeenCalledWith(mockUserId);
+    });
+
+    it("should return 'noMigrationNeeded' when user uses argon2id`", async () => {
+      mockMasterPasswordService.userHasMasterPassword.mockResolvedValue(true);
+      mockKdfConfigService.getKdfConfig.mockResolvedValue(new Argon2KdfConfig(3, 64, 4));
+      const result = await sut.needsMigration(mockUserId);
+      expect(result).toBe("noMigrationNeeded");
     });
 
     it("should return 'noMigrationNeeded' when PBKDF2 iterations are already above minimum", async () => {
@@ -62,7 +62,6 @@ describe("MinimumKdfMigration", () => {
         iterations: MINIMUM_PBKDF2_ITERATIONS_FOR_UPGRADE + 1000,
       };
       mockKdfConfigService.getKdfConfig.mockResolvedValue(mockKdfConfig as any);
-      mockConfigService.getFeatureFlag.mockResolvedValue(true);
 
       const result = await sut.needsMigration(mockUserId);
 
