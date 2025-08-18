@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base",
-  "include": ["src", "spec", "../key-management-ui/src/kdf/encrypted-migrations-initiator.service.ts"],
+  "include": ["src", "spec"],
   "exclude": ["node_modules", "dist"]
 }

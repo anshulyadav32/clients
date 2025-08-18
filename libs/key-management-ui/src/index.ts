@@ -9,4 +9,3 @@ export { AccountRecoveryTrustComponent } from "./trust/account-recovery-trust.co
 export { EmergencyAccessTrustComponent } from "./trust/emergency-access-trust.component";
 export { RemovePasswordComponent } from "./key-connector/remove-password.component";
 export { PromptMigrationPasswordComponent } from "./encrypted-migration/prompt-migration-password.component";
-
