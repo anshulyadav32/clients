@@ -6,7 +6,6 @@ import { merge, of, Subject } from "rxjs";
 import { CollectionService } from "@bitwarden/admin-console/common";
 import { DeviceManagementComponentServiceAbstraction } from "@bitwarden/angular/auth/device-management/device-management-component.service.abstraction";
 import { ChangePasswordService } from "@bitwarden/angular/auth/password-management/change-password";
-import { EncryptedMigrationsSchedulerService } from "@bitwarden/angular/key-management/encrypted-migration/encrypted-migrations-scheduler.service";
 import { AngularThemingService } from "@bitwarden/angular/platform/services/theming/angular-theming.service";
 import { SafeProvider, safeProvider } from "@bitwarden/angular/platform/utils/safe-provider";
 import { ViewCacheService } from "@bitwarden/angular/platform/view-cache";
@@ -214,7 +213,6 @@ const safeProviders: SafeProvider[] = [
   safeProvider(DialogService),
   safeProvider(PopupCloseWarningService),
   safeProvider(InlineMenuFieldQualificationService),
-  safeProvider(EncryptedMigrationsSchedulerService),
   safeProvider({
     provide: DEFAULT_VAULT_TIMEOUT,
     useValue: VaultTimeoutStringType.OnRestart,
