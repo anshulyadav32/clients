@@ -53,8 +53,6 @@ import {
 import { UserDecryptionOptions } from "../models/domain/user-decryption-options";
 import { CacheData } from "../services/login-strategies/login-strategy.state";
 
-import { PasswordLoginStrategyData } from "./password-login.strategy";
-
 type IdentityResponse =
   | IdentityTokenResponse
   | IdentityTwoFactorResponse
@@ -117,9 +115,8 @@ export abstract class LoginStrategy {
     data.tokenRequest.setTwoFactor(twoFactor);
     this.cache.next(data);
     const [authResult] = await this.startLogIn();
-    if (this.cache.value instanceof PasswordLoginStrategyData) {
-      authResult.masterPassword = this.cache.value["masterPassword"] ?? null;
-    }
+    // There is an import cycle between PasswordLoginStrategyData and LoginStrategy, which means this cast is necessary, which is solved by extracting the data classes.
+    authResult.masterPassword = (this.cache.value as any)["masterPassword"] ?? null;
     return authResult;
   }
 
@@ -288,9 +285,8 @@ export abstract class LoginStrategy {
     await this.processForceSetPasswordReason(response.forcePasswordReset, userId);
 
     this.messagingService.send("loggedIn");
-    if (this.cache.value instanceof PasswordLoginStrategyData) {
-      result.masterPassword = this.cache.value["masterPassword"] ?? null;
-    }
+    // There is an import cycle between PasswordLoginStrategyData and LoginStrategy, which means this cast is necessary, which is solved by extracting the data classes.
+    result.masterPassword = (this.cache.value as any)["masterPassword"] ?? null;
 
     return result;
   }
@@ -414,9 +410,6 @@ export abstract class LoginStrategy {
   ): Promise<AuthResult> {
     const result = new AuthResult();
     result.requiresDeviceVerification = true;
-    if (this.cache.value instanceof PasswordLoginStrategyData) {
-      result.masterPassword = this.cache.value["masterPassword"] ?? null;
-    }
     return result;
   }
 }

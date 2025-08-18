@@ -143,7 +143,7 @@ describe("EncryptedMigrationsSchedulerService", () => {
       expect(mockLogService.info).toHaveBeenCalledWith(
         `[EncryptedMigrationsScheduler] User ${mockUserId} needs migrations with master password`,
       );
-      expect(mockEncryptedMigrator.runMigrations).toHaveBeenCalledWith(mockUserId);
+      expect(mockEncryptedMigrator.runMigrations).toHaveBeenCalledWith(mockUserId, null);
     });
 
     it("should run migrations with interaction when migration is needed", async () => {
@@ -169,7 +169,7 @@ describe("EncryptedMigrationsSchedulerService", () => {
 
       await service.runMigrationsIfNeeded(mockUserId);
 
-      expect(mockEncryptedMigrator.runMigrations).toHaveBeenCalledWith(mockUserId);
+      expect(mockEncryptedMigrator.runMigrations).toHaveBeenCalledWith(mockUserId, null);
       expect(mockLogService.error).not.toHaveBeenCalled();
     });
 
@@ -180,7 +180,7 @@ describe("EncryptedMigrationsSchedulerService", () => {
 
       await service.runMigrationsIfNeeded(mockUserId);
 
-      expect(mockEncryptedMigrator.runMigrations).toHaveBeenCalledWith(mockUserId);
+      expect(mockEncryptedMigrator.runMigrations).toHaveBeenCalledWith(mockUserId, null);
       expect(mockLogService.error).toHaveBeenCalledWith(
         "[EncryptedMigrationsInitiator] Error during migration without interaction",
         mockError,
@@ -281,7 +281,6 @@ describe("EncryptedMigrationsSchedulerService", () => {
       );
       expect(mockToastService.showToast).toHaveBeenCalledWith({
         variant: "success",
-        title: null,
         message: "translated_migrationsFailed",
       });
     });
