@@ -1,4 +1,3 @@
-import { TestBed } from "@angular/core/testing";
 import { of } from "rxjs";
 
 import { AccountInfo, AccountService } from "@bitwarden/common/auth/abstractions/account.service";
@@ -13,13 +12,13 @@ import { DialogService, ToastService } from "@bitwarden/components";
 import { LogService } from "@bitwarden/logging";
 
 import {
-  EncryptedMigrationsSchedulerService,
+  DefaultEncryptedMigrationsSchedulerService,
   ENCRYPTED_MIGRATION_DISMISSED,
 } from "./encrypted-migrations-scheduler.service";
 import { PromptMigrationPasswordComponent } from "./prompt-migration-password.component";
 
-describe("EncryptedMigrationsSchedulerService", () => {
-  let service: EncryptedMigrationsSchedulerService;
+describe("DefaultEncryptedMigrationsSchedulerService", () => {
+  let service: DefaultEncryptedMigrationsSchedulerService;
   let mockAccountService: jest.Mocked<AccountService>;
   let mockAuthService: jest.Mocked<AuthService>;
   let mockEncryptedMigrator: jest.Mocked<EncryptedMigrator>;
@@ -90,22 +89,17 @@ describe("EncryptedMigrationsSchedulerService", () => {
     // Mock the static open method
     jest.spyOn(PromptMigrationPasswordComponent, "open").mockReturnValue(mockDialogRef as any);
 
-    TestBed.configureTestingModule({
-      providers: [
-        EncryptedMigrationsSchedulerService,
-        { provide: AccountService, useValue: mockAccountService },
-        { provide: AuthService, useValue: mockAuthService },
-        { provide: EncryptedMigrator, useValue: mockEncryptedMigrator },
-        { provide: StateProvider, useValue: mockStateProvider },
-        { provide: SyncService, useValue: mockSyncService },
-        { provide: DialogService, useValue: mockDialogService },
-        { provide: ToastService, useValue: mockToastService },
-        { provide: I18nService, useValue: mockI18nService },
-        { provide: LogService, useValue: mockLogService },
-      ],
-    });
-
-    service = TestBed.inject(EncryptedMigrationsSchedulerService);
+    service = new DefaultEncryptedMigrationsSchedulerService(
+      mockSyncService,
+      mockAccountService,
+      mockStateProvider,
+      mockEncryptedMigrator,
+      mockAuthService,
+      mockLogService,
+      mockDialogService,
+      mockToastService,
+      mockI18nService,
+    );
   });
 
   afterEach(() => {

@@ -1,4 +1,3 @@
-import { inject, Injectable } from "@angular/core";
 import { combineLatest, map, switchMap, of, firstValueFrom, filter, debounceTime, tap } from "rxjs";
 
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
@@ -16,6 +15,7 @@ import { UserId } from "@bitwarden/common/types/guid";
 import { DialogService, ToastService } from "@bitwarden/components";
 import { LogService } from "@bitwarden/logging";
 
+import { EncryptedMigrationsSchedulerService } from "./encrypted-migrations-scheduler.service.abstraction";
 import { PromptMigrationPasswordComponent } from "./prompt-migration-password.component";
 
 export const ENCRYPTED_MIGRATION_DISMISSED = new UserKeyDefinition<Date>(
@@ -38,21 +38,20 @@ type UserSyncData = {
  * if it is required by showing a UI prompt. It is only one means of triggering migrations, in case the user stays unlocked for a while,
  * or regularly logs in without a master-password, when the migrations do require a master-password to run.
  */
-@Injectable({
-  providedIn: "root",
-})
-export class EncryptedMigrationsSchedulerService {
-  private syncService = inject(SyncService);
-  private accountService = inject(AccountService);
-  private stateProvider = inject(StateProvider);
-  private encryptedMigrator = inject(EncryptedMigrator);
-  private authService = inject(AuthService);
-  private logService = inject(LogService);
-  private dialogService = inject(DialogService);
-  private toastService = inject(ToastService);
-  private i18nService = inject(I18nService);
-
-  constructor() {
+export class DefaultEncryptedMigrationsSchedulerService
+  implements EncryptedMigrationsSchedulerService
+{
+  constructor(
+    private syncService: SyncService,
+    private accountService: AccountService,
+    private stateProvider: StateProvider,
+    private encryptedMigrator: EncryptedMigrator,
+    private authService: AuthService,
+    private logService: LogService,
+    private dialogService: DialogService,
+    private toastService: ToastService,
+    private i18nService: I18nService,
+  ) {
     // For all accounts, if the auth status changes to unlocked or a sync happens, prompt for migration
     this.accountService.accounts$
       .pipe(
@@ -129,7 +128,7 @@ export class EncryptedMigrationsSchedulerService {
     );
     if (dismissedDate != null) {
       const now = new Date();
-      const timeDiff = now.getTime() - dismissedDate.getTime();
+      const timeDiff = now.getTime() - (dismissedDate as Date).getTime();
       const hoursDiff = timeDiff / (1000 * 60 * 60);
 
       if (hoursDiff < DISMISS_TIME_HOURS) {
