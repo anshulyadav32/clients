@@ -10,13 +10,13 @@ import { SingleUserState, StateProvider } from "@bitwarden/common/platform/state
 import { SyncService } from "@bitwarden/common/platform/sync";
 import { UserId } from "@bitwarden/common/types/guid";
 import { DialogService, ToastService } from "@bitwarden/components";
-import { PromptMigrationPasswordComponent } from "@bitwarden/key-management-ui";
 import { LogService } from "@bitwarden/logging";
 
 import {
   EncryptedMigrationsSchedulerService,
   ENCRYPTED_MIGRATION_DISMISSED,
 } from "./encrypted-migrations-scheduler.service";
+import { PromptMigrationPasswordComponent } from "./prompt-migration-password.component";
 
 describe("EncryptedMigrationsSchedulerService", () => {
   let service: EncryptedMigrationsSchedulerService;

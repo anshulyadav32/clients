@@ -14,8 +14,9 @@ import {
 import { SyncService } from "@bitwarden/common/platform/sync";
 import { UserId } from "@bitwarden/common/types/guid";
 import { DialogService, ToastService } from "@bitwarden/components";
-import { PromptMigrationPasswordComponent } from "@bitwarden/key-management-ui";
 import { LogService } from "@bitwarden/logging";
+
+import { PromptMigrationPasswordComponent } from "./prompt-migration-password.component";
 
 export const ENCRYPTED_MIGRATION_DISMISSED = new UserKeyDefinition<Date>(
   ENCRYPTED_MIGRATION_DISK,

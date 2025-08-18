@@ -8,4 +8,3 @@ export { KeyRotationTrustInfoComponent } from "./key-rotation/key-rotation-trust
 export { AccountRecoveryTrustComponent } from "./trust/account-recovery-trust.component";
 export { EmergencyAccessTrustComponent } from "./trust/emergency-access-trust.component";
 export { RemovePasswordComponent } from "./key-connector/remove-password.component";
-export { PromptMigrationPasswordComponent } from "./encrypted-migration/prompt-migration-password.component";
