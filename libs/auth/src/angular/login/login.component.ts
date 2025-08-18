@@ -246,7 +246,7 @@ export class LoginComponent implements OnInit, OnDestroy {
     try {
       const authResult = await this.loginStrategyService.logIn(credentials);
 
-      await this.handleAuthResult(authResult, masterPassword);
+      await this.handleAuthResult(authResult);
     } catch (error) {
       this.logService.error(error);
       this.handleSubmitError(error);
@@ -294,7 +294,7 @@ export class LoginComponent implements OnInit, OnDestroy {
    *          If you update this method, do not forget to add a `return`
    *          to each if-condition block where necessary to stop code execution.
    */
-  private async handleAuthResult(authResult: AuthResult, masterPassword: string): Promise<void> {
+  private async handleAuthResult(authResult: AuthResult): Promise<void> {
     if (authResult.requiresEncryptionKeyMigration) {
       /* Legacy accounts used the master key to encrypt data.
          This is now unsupported and requires a downgraded client */
@@ -318,7 +318,7 @@ export class LoginComponent implements OnInit, OnDestroy {
     }
 
     // User logged in successfully so execute side effects
-    await this.loginSuccessHandlerService.run(authResult.userId, masterPassword);
+    await this.loginSuccessHandlerService.run(authResult.userId, authResult.masterPassword);
 
     // Determine where to send the user next
     // The AuthGuard will handle routing to change-password based on state
