@@ -98,14 +98,14 @@ export class DefaultEncryptedMigrationsSchedulerService
           `[EncryptedMigrationsScheduler] User ${userId} needs migrations with master password`,
         );
         // If the user is unlocked, we can run migrations with the master password
-        await this.runMigrationsWithoutInteraction(userId);
+        await this.runMigrationsWithInteraction(userId);
         break;
       case "needsMigration":
         this.logService.info(
           `[EncryptedMigrationsScheduler] User ${userId} needs migrations with master password`,
         );
         // If the user is unlocked, we can prompt for the master password
-        await this.runMigrationsWithInteraction(userId);
+        await this.runMigrationsWithoutInteraction(userId);
         break;
     }
   }
@@ -154,7 +154,7 @@ export class DefaultEncryptedMigrationsSchedulerService
       this.logService.error("[EncryptedMigrationsInitiator] Error during migration prompt", error);
       // If migrations failed when the user actively was prompted, show a toast
       this.toastService.showToast({
-        variant: "success",
+        variant: "error",
         message: this.i18nService.t("migrationsFailed"),
       });
     }

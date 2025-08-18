@@ -129,7 +129,7 @@ describe("DefaultEncryptedMigrationsSchedulerService", () => {
     });
 
     it("should run migrations without interaction when master password is not required", async () => {
-      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigrationWithMasterPassword");
+      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigration");
 
       await service.runMigrationsIfNeeded(mockUserId);
 
@@ -141,7 +141,7 @@ describe("DefaultEncryptedMigrationsSchedulerService", () => {
     });
 
     it("should run migrations with interaction when migration is needed", async () => {
-      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigration");
+      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigrationWithMasterPassword");
 
       await service.runMigrationsIfNeeded(mockUserId);
 
@@ -159,7 +159,7 @@ describe("DefaultEncryptedMigrationsSchedulerService", () => {
 
   describe("runMigrationsWithoutInteraction", () => {
     it("should run migrations without master password", async () => {
-      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigrationWithMasterPassword");
+      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigration");
 
       await service.runMigrationsIfNeeded(mockUserId);
 
@@ -169,7 +169,7 @@ describe("DefaultEncryptedMigrationsSchedulerService", () => {
 
     it("should handle errors during migration without interaction", async () => {
       const mockError = new Error("Migration failed");
-      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigrationWithMasterPassword");
+      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigration");
       mockEncryptedMigrator.runMigrations.mockRejectedValue(mockError);
 
       await service.runMigrationsIfNeeded(mockUserId);
@@ -184,7 +184,7 @@ describe("DefaultEncryptedMigrationsSchedulerService", () => {
 
   describe("runMigrationsWithInteraction", () => {
     beforeEach(() => {
-      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigration");
+      mockEncryptedMigrator.needsMigrations.mockResolvedValue("needsMigrationWithMasterPassword");
     });
 
     it("should skip if migration was dismissed recently", async () => {
@@ -274,7 +274,7 @@ describe("DefaultEncryptedMigrationsSchedulerService", () => {
         mockError,
       );
       expect(mockToastService.showToast).toHaveBeenCalledWith({
-        variant: "success",
+        variant: "error",
         message: "translated_migrationsFailed",
       });
     });
