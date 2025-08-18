@@ -202,7 +202,7 @@ export class RegistrationFinishComponent implements OnInit, OnDestroy {
         });
       }
 
-      await this.loginSuccessHandlerService.run(authenticationResult.userId);
+      await this.loginSuccessHandlerService.run(authenticationResult.userId, null);
 
       await this.router.navigate(["/vault"]);
     } catch (e) {

@@ -382,7 +382,7 @@ export class LockComponent implements OnInit, OnDestroy {
 
       // If user cancels biometric prompt, userKey is undefined.
       if (userKey) {
-        await this.setUserKeyAndContinue(userKey, false);
+        await this.setUserKeyAndContinue(userKey, false, null);
       }
 
       this.unlockingViaBiometrics = false;
@@ -470,7 +470,7 @@ export class LockComponent implements OnInit, OnDestroy {
       const userKey = await this.pinService.decryptUserKeyWithPin(pin, this.activeAccount.id);
 
       if (userKey) {
-        await this.setUserKeyAndContinue(userKey);
+        await this.setUserKeyAndContinue(userKey, false, null);
         return; // successfully unlocked
       }
 
@@ -576,8 +576,8 @@ export class LockComponent implements OnInit, OnDestroy {
 
   private async setUserKeyAndContinue(
     key: UserKey,
-    evaluatePasswordAfterUnlock = false,
-    masterPassword?: string,
+    evaluatePasswordAfterUnlock: boolean,
+    masterPassword: string | null,
   ) {
     if (this.activeAccount == null) {
       throw new Error("No active user.");
@@ -601,7 +601,7 @@ export class LockComponent implements OnInit, OnDestroy {
    * @param masterPassword The master password that was used to unlock, if the unlock method was master password
    * @returns
    */
-  private async doContinue(evaluatePasswordAfterUnlock: boolean, masterPassword?: string) {
+  private async doContinue(evaluatePasswordAfterUnlock: boolean, masterPassword: string | null) {
     if (this.activeAccount == null) {
       throw new Error("No active user.");
     }

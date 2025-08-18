@@ -14,7 +14,7 @@ export class DefaultLoginSuccessHandlerService implements LoginSuccessHandlerSer
     private encryptedMigrator: EncryptedMigrator,
   ) {}
 
-  async run(userId: UserId, masterPassword?: string): Promise<void> {
+  async run(userId: UserId, masterPassword: string | null): Promise<void> {
     await this.syncService.fullSync(true, { skipTokenRefresh: true });
     await this.userAsymmetricKeysRegenerationService.regenerateIfNeeded(userId);
     await this.loginEmailService.clearLoginEmail();

@@ -7,5 +7,5 @@ export abstract class LoginSuccessHandlerService {
    * @param userId The user id.
    * @param masterPassword
    */
-  abstract run(userId: UserId, masterPassword?: string): Promise<void>;
+  abstract run(userId: UserId, masterPassword: string | null): Promise<void>;
 }

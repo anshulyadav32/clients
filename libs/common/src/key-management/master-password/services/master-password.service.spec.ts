@@ -23,7 +23,6 @@ import { MasterKey, UserKey } from "../../../types/key";
 import { CryptoFunctionService } from "../../crypto/abstractions/crypto-function.service";
 import { EncryptService } from "../../crypto/abstractions/encrypt.service";
 import { EncString } from "../../crypto/models/enc-string";
-import { KeyConnectorService } from "../../key-connector/abstractions/key-connector.service";
 import { MasterPasswordSalt } from "../types/master-password.types";
 
 import { MasterPasswordService } from "./master-password.service";
@@ -38,7 +37,6 @@ describe("MasterPasswordService", () => {
   let logService: MockProxy<LogService>;
   let cryptoFunctionService: MockProxy<CryptoFunctionService>;
   let accountService: FakeAccountService;
-  let keyConnectorService: MockProxy<KeyConnectorService>;
 
   const userId = "00000000-0000-0000-0000-000000000000" as UserId;
   const mockUserState = {
@@ -62,7 +60,6 @@ describe("MasterPasswordService", () => {
     logService = mock<LogService>();
     cryptoFunctionService = mock<CryptoFunctionService>();
     accountService = mockAccountServiceWith(userId);
-    keyConnectorService = mock<KeyConnectorService>();
 
     stateProvider.getUser.mockReturnValue(mockUserState as any);
 
@@ -76,7 +73,6 @@ describe("MasterPasswordService", () => {
       logService,
       cryptoFunctionService,
       accountService,
-      keyConnectorService,
     );
 
     encryptService.unwrapSymmetricKey.mockResolvedValue(makeSymmetricCryptoKey(64, 1));
