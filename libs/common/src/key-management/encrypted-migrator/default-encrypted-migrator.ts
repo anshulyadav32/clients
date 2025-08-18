@@ -5,7 +5,7 @@ import { UserId } from "@bitwarden/common/types/guid";
 import { KdfConfigService } from "@bitwarden/key-management";
 import { LogService } from "@bitwarden/logging";
 
-import { ChangeKdfService } from "../kdf/change-kdf-service.abstraction";
+import { ChangeKdfService } from "../kdf/change-kdf.service.abstraction";
 import { MasterPasswordServiceAbstraction } from "../master-password/abstractions/master-password.service.abstraction";
 
 import { EncryptedMigrator } from "./encrypted-migrator.abstraction";

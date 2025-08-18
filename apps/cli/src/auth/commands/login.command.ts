@@ -32,7 +32,7 @@ import { UpdateTempPasswordRequest } from "@bitwarden/common/auth/models/request
 import { ClientType } from "@bitwarden/common/enums";
 import { CryptoFunctionService } from "@bitwarden/common/key-management/crypto/abstractions/crypto-function.service";
 import { EncString } from "@bitwarden/common/key-management/crypto/models/enc-string";
-import { EncryptedMigratorAbstraction } from "@bitwarden/common/key-management/encrypted-migrator/encrypted-migrator.abstraction";
+import { EncryptedMigrator } from "@bitwarden/common/key-management/encrypted-migrator/encrypted-migrator.abstraction";
 import { KeyConnectorService } from "@bitwarden/common/key-management/key-connector/abstractions/key-connector.service";
 import { MasterPasswordServiceAbstraction } from "@bitwarden/common/key-management/master-password/abstractions/master-password.service.abstraction";
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
@@ -81,7 +81,7 @@ export class LoginCommand {
     protected ssoUrlService: SsoUrlService,
     protected i18nService: I18nService,
     protected masterPasswordService: MasterPasswordServiceAbstraction,
-    protected encryptedMigrator: EncryptedMigratorAbstraction,
+    protected encryptedMigrator: EncryptedMigrator,
   ) {}
 
   async run(email: string, password: string, options: OptionValues) {

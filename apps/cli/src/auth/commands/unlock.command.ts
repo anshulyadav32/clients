@@ -8,7 +8,7 @@ import { UserVerificationService } from "@bitwarden/common/auth/abstractions/use
 import { VerificationType } from "@bitwarden/common/auth/enums/verification-type";
 import { MasterPasswordVerification } from "@bitwarden/common/auth/types/verification";
 import { CryptoFunctionService } from "@bitwarden/common/key-management/crypto/abstractions/crypto-function.service";
-import { EncryptedMigratorAbstraction } from "@bitwarden/common/key-management/encrypted-migrator/encrypted-migrator.abstraction";
+import { EncryptedMigrator } from "@bitwarden/common/key-management/encrypted-migrator/encrypted-migrator.abstraction";
 import { KeyConnectorService } from "@bitwarden/common/key-management/key-connector/abstractions/key-connector.service";
 import { InternalMasterPasswordServiceAbstraction } from "@bitwarden/common/key-management/master-password/abstractions/master-password.service.abstraction";
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
@@ -36,7 +36,7 @@ export class UnlockCommand {
     private organizationApiService: OrganizationApiServiceAbstraction,
     private logout: () => Promise<void>,
     private i18nService: I18nService,
-    private encryptedMigrator: EncryptedMigratorAbstraction,
+    private encryptedMigrator: EncryptedMigrator,
   ) {}
 
   async run(password: string, cmdOptions: Record<string, any>) {
