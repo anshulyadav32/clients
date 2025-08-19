@@ -62,10 +62,7 @@ describe("DefaultEncryptedMigrationsSchedulerService", () => {
       closed: of(mockMasterPassword),
     };
 
-    // Mock the static open method
     jest.spyOn(PromptMigrationPasswordComponent, "open").mockReturnValue(mockDialogRef as any);
-
-    // Mock i18n service
     mockI18nService.t.mockReturnValue("translated_migrationsFailed");
 
     service = new DefaultEncryptedMigrationsSchedulerService(

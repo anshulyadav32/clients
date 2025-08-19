@@ -23,7 +23,7 @@ describe("EncryptedMigrator", () => {
   const masterPasswordService = mock<MasterPasswordServiceAbstraction>();
 
   let sut: DefaultEncryptedMigrator;
-  let mockMigration: jest.Mocked<MinimumKdfMigration>;
+  const mockMigration = mock<MinimumKdfMigration>();
 
   const mockUserId = "00000000-0000-0000-0000-000000000000" as UserId;
   const mockMasterPassword = "masterPassword123";
@@ -31,13 +31,7 @@ describe("EncryptedMigrator", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Create a mock instance of MinimumKdfMigration
-    mockMigration = {
-      needsMigration: jest.fn(),
-      runMigrations: jest.fn(),
-    } as unknown as jest.Mocked<MinimumKdfMigration>;
-
-    // Mock the constructor of MinimumKdfMigration to return our mock
+    // Mock the MinimumKdfMigration constructor to return our mock
     (MinimumKdfMigration as jest.MockedClass<typeof MinimumKdfMigration>).mockImplementation(
       () => mockMigration,
     );
@@ -108,11 +102,9 @@ describe("EncryptedMigrator", () => {
     });
 
     it("should run multiple migrations", async () => {
-      // Create a second mock migration
       const mockSecondMigration = mock<EncryptedMigration>();
       mockSecondMigration.needsMigration.mockResolvedValue("needsMigration");
 
-      // Add a second migration manually to test multiple migrations
       (sut as any).migrations.push({
         name: "Test Second Migration",
         migration: mockSecondMigration,
@@ -122,7 +114,6 @@ describe("EncryptedMigrator", () => {
 
       await sut.runMigrations(mockUserId, mockMasterPassword);
 
-      // Verify both migrations were checked and run
       expect(mockMigration.needsMigration).toHaveBeenCalledWith(mockUserId);
       expect(mockSecondMigration.needsMigration).toHaveBeenCalledWith(mockUserId);
       expect(mockMigration.runMigrations).toHaveBeenCalledWith(mockUserId, mockMasterPassword);
@@ -162,11 +153,9 @@ describe("EncryptedMigrator", () => {
     });
 
     it("should prioritize 'needsMigrationWithMasterPassword' over 'needsMigration'", async () => {
-      // Create a second mock migration
       const mockSecondMigration = mock<EncryptedMigration>();
       mockSecondMigration.needsMigration.mockResolvedValue("needsMigration");
 
-      // Add a second migration manually to test multiple migrations
       (sut as any).migrations.push({
         name: "Test Second Migration",
         migration: mockSecondMigration,
@@ -182,11 +171,9 @@ describe("EncryptedMigrator", () => {
     });
 
     it("should return 'needsMigration' when some migrations need running but none need master password", async () => {
-      // Create a second mock migration
       const mockSecondMigration = mock<EncryptedMigration>();
       mockSecondMigration.needsMigration.mockResolvedValue("noMigrationNeeded");
 
-      // Add a second migration manually to test multiple migrations
       (sut as any).migrations.push({
         name: "Test Second Migration",
         migration: mockSecondMigration,
