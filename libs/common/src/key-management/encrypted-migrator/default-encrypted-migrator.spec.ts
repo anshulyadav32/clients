@@ -85,14 +85,6 @@ describe("EncryptedMigrator", () => {
       expect(mockMigration.runMigrations).toHaveBeenCalledWith(mockUserId, mockMasterPassword);
     });
 
-    it("should return when migration needs master password but none is provided", async () => {
-      mockMigration.needsMigration.mockResolvedValue("needsMigrationWithMasterPassword");
-
-      await sut.runMigrations(mockUserId, null);
-      expect(mockMigration.needsMigration).toHaveBeenCalledWith(mockUserId);
-      expect(mockMigration.runMigrations).not.toHaveBeenCalled();
-    });
-
     it("should throw error when migration needs master password but null is provided", async () => {
       mockMigration.needsMigration.mockResolvedValue("needsMigrationWithMasterPassword");
 
