@@ -18,6 +18,10 @@ export class DefaultLoginSuccessHandlerService implements LoginSuccessHandlerSer
     await this.syncService.fullSync(true, { skipTokenRefresh: true });
     await this.userAsymmetricKeysRegenerationService.regenerateIfNeeded(userId);
     await this.loginEmailService.clearLoginEmail();
-    await this.encryptedMigrator.runMigrations(userId, masterPassword);
+    try {
+      await this.encryptedMigrator.runMigrations(userId, masterPassword);
+    } catch {
+      // Don't block login success on migration failure
+    }
   }
 }

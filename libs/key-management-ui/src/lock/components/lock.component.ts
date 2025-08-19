@@ -608,7 +608,11 @@ export class LockComponent implements OnInit, OnDestroy {
 
     await this.biometricStateService.resetUserPromptCancelled();
 
-    await this.encryptedMigrator.runMigrations(this.activeAccount.id, masterPassword);
+    try {
+      await this.encryptedMigrator.runMigrations(this.activeAccount.id, masterPassword);
+    } catch {
+      // Don't block login success on migration failure
+    }
 
     this.messagingService.send("unlocked");
 

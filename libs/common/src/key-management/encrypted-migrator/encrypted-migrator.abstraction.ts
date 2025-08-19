@@ -15,6 +15,7 @@ export abstract class EncryptedMigrator {
    * @param masterPassword The user's current master password.
    * @throws If the user does not exist
    * @throws If the user is locked or logged out
+   * @throws If a migration fails
    */
   abstract runMigrations(userId: UserId, masterPassword: string | null): Promise<void>;
   /**
