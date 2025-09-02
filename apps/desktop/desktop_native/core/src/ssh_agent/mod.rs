@@ -20,6 +20,7 @@ mod platform_ssh_agent;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod peercred_unix_listener_stream;
 
+mod agent;
 pub mod peerinfo;
 mod request_parser;
 
@@ -35,6 +36,7 @@ pub struct BitwardenDesktopAgent<Key> {
     is_running: Arc<AtomicBool>,
 }
 
+#[derive(Debug)]
 pub struct SshAgentUIRequest {
     pub request_id: u32,
     pub cipher_id: Option<String>,

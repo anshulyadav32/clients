@@ -13,7 +13,9 @@ use homedir::my_home;
 use tokio::{net::UnixListener, sync::Mutex};
 use tokio_util::sync::CancellationToken;
 
-use crate::ssh_agent::peercred_unix_listener_stream::PeercredUnixListenerStream;
+use crate::ssh_agent::{
+    agent::protocol, peercred_unix_listener_stream::PeercredUnixListenerStream,
+};
 
 use super::{BitwardenDesktopAgent, BitwardenSshKey, SshAgentUIRequest};
 
@@ -90,16 +92,19 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
                     cloned_agent_state
                         .is_running
                         .store(true, std::sync::atomic::Ordering::Relaxed);
-                    let _ = ssh_agent::serve(
-                        stream,
-                        cloned_agent_state.clone(),
-                        cloned_keystore,
-                        cloned_cancellation_token,
-                    )
-                    .await;
-                    cloned_agent_state
-                        .is_running
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    protocol::serve_listener(stream, cloned_cancellation_token)
+                        .await
+                        .unwrap();
+                    // let _ = ssh_agent::serve(
+                    //     stream,
+                    //     cloned_agent_state.clone(),
+                    //     cloned_keystore,
+                    //     cloned_cancellation_token,
+                    // )
+                    // .await;
+                    // cloned_agent_state
+                    //     .is_running
+                    //     .store(false, std::sync::atomic::Ordering::Relaxed);
                     println!("[SSH Agent Native Module] SSH Agent server exited");
                 }
                 Err(e) => {
@@ -109,5 +114,52 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
         });
 
         Ok(agent)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use std::{sync::Arc, thread::sleep};
+    use tokio::sync::{broadcast, mpsc, Mutex};
+
+    const PRIVATE_ED25519_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmAAAAKByJoOYciaD
+mAAAAAtzc2gtZWQyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmA
+AAAEBQK5JpycFzP/4rchfpZhbdwxjTwHNuGx2/kvG4i6xfp0NQM7sKFkh52cgnEYD3lP9l
+PJER+1qGsUQkz954LyaYAAAAHHF1ZXh0ZW5ATWFjQm9vay1Qcm8tMTYubG9jYWwB
+-----END OPENSSH PRIVATE KEY-----";
+    const PUBLIC_ED25519_KEY: &str =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIENQM7sKFkh52cgnEYD3lP9lPJER+1qGsUQkz954LyaY test-key";
+
+    /// Note: Run this test with --no-capture to see the results in real-time
+    #[tokio::test]
+    #[ignore]
+    async fn manual_test_ssh_agent_unix() {
+        let (auth_request_tx, mut auth_request_rx) = mpsc::channel::<SshAgentUIRequest>(8);
+        let (auth_response_tx, auth_response_rx) = broadcast::channel::<(u32, bool)>(8);
+        let auth_response_rx = Arc::new(Mutex::new(auth_response_rx));
+
+        let _auth_handler = tokio::spawn(async move {
+            while let Some(req) = auth_request_rx.recv().await {
+                println!("[TEST] Received auth request: {:?}", req);
+                let _ = auth_response_tx.send((0, true));
+            }
+        });
+
+        let mut agent =
+            BitwardenDesktopAgent::start_server(auth_request_tx, auth_response_rx.clone()).unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        agent
+            .set_keys(vec![(
+                PRIVATE_ED25519_KEY.to_string(),
+                "test-key".to_string(),
+                "my-id".to_string(),
+            )])
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
     }
 }
