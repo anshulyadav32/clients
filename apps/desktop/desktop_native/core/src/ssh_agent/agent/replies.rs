@@ -1,9 +1,7 @@
-use bitwarden_russh::ssh_agent::Agent;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use rand::rngs::OsRng;
 use ssh_encoding::Encode;
 
-use crate::ssh_agent::agent::agent::SshKeyPair;
+use crate::ssh_agent::agent::agent::{RsaSigningScheme, SshKeyPair, SshPrivateKey, SshSignature};
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive, Default)]
@@ -28,6 +26,11 @@ impl AgentIdentitiesReply {
     }
 
     pub fn encode(&self) -> Result<SshReplyFrame, ssh_encoding::Error> {
+        println!(
+            "[SSH Agent] Encoding identities reply with {} keys",
+            self.keys.len()
+        );
+
         // The Reply frame consists of the number of keys, followed by each key's public key and name
         let mut reply_message = Vec::new();
         (self.keys.len() as u32).encode(&mut reply_message)?;
@@ -43,15 +46,23 @@ impl AgentIdentitiesReply {
     }
 }
 
-pub(crate) struct AgentSignReply {}
+pub(crate) struct AgentSignReply(SshSignature);
 impl AgentSignReply {
-    pub fn new() -> Self {
-        let rsa_key = rsa::RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048)
-            .expect("Failed to generate a key");
-        rsa_key
-            .sign(rsa::pkcs1v15::Pkcs1v15Sign::new::<sha2::Sha256>(), b"test")
-            .unwrap();
-        Self {}
+    pub fn new(private_key: &SshPrivateKey, data: &[u8]) -> Self {
+        Self(
+            private_key
+                .sign(data, RsaSigningScheme::Pkcs1v15Sha512)
+                .unwrap(),
+        )
+    }
+
+    pub fn encode(&self) -> Result<SshReplyFrame, ssh_encoding::Error> {
+        let mut reply_payload = Vec::new();
+        self.0.encode().unwrap().encode(&mut reply_payload)?;
+        Ok(SshReplyFrame::new(
+            AgentReply::SSH_AGENT_SIGN_RESPONSE,
+            reply_payload,
+        ))
     }
 }
 

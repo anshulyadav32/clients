@@ -1,14 +1,27 @@
 use std::{fmt::Formatter, ops::Deref};
 
 use rsa::signature::SignerMut;
+use ssh_encoding::Encode;
 use ssh_key::{
     private::{Ed25519Keypair, RsaKeypair},
-    HashAlg,
+    PublicKey, Signature, SshSig,
 };
 use std::fmt::Debug;
 
 pub(crate) trait Agent: Send + Sync {
     async fn list_keys(&self) -> Result<Vec<SshKeyPair>, anyhow::Error>;
+    async fn get_private_key(
+        &self,
+        public_key: SshPublicKey,
+    ) -> Result<Option<SshPrivateKey>, anyhow::Error> {
+        let keys = self.list_keys().await?;
+        for key in keys {
+            if key.public_key == public_key {
+                return Ok(Some(key.private_key));
+            }
+        }
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -16,7 +29,27 @@ pub struct SshKeyPair {
     pub public_key: SshPublicKey,
     pub name: String,
     // OpenSSH PEM
-    private_key: SshPrivateKey,
+    pub private_key: SshPrivateKey,
+}
+
+impl SshKeyPair {
+    pub fn new(private_key: SshPrivateKey, name: String) -> Self {
+        SshKeyPair {
+            public_key: private_key.public_key(),
+            name,
+            private_key,
+        }
+    }
+}
+
+pub struct SshSignature(Signature);
+impl SshSignature {
+    pub(crate) fn encode(&self) -> Result<Vec<u8>, ssh_encoding::Error> {
+        let mut buffer = Vec::new();
+        self.0.algorithm().as_str().encode(&mut buffer)?;
+        self.0.as_bytes().encode(&mut buffer)?;
+        Ok(buffer)
+    }
 }
 
 impl Deref for SshPublicKey {
@@ -27,6 +60,7 @@ impl Deref for SshPublicKey {
     }
 }
 
+#[allow(unused)]
 pub enum RsaSigningScheme {
     Pkcs1v15Sha512,
     Pkcs1v15Sha256,
@@ -62,16 +96,20 @@ impl SshPrivateKey {
             .expect("Key is always valid")
     }
 
-    fn sign(&self, data: &[u8], _scheme: RsaSigningScheme) -> Result<Vec<u8>, anyhow::Error> {
-        let signature = match self {
+    pub(crate) fn sign(
+        &self,
+        data: &[u8],
+        _scheme: RsaSigningScheme,
+    ) -> Result<SshSignature, anyhow::Error> {
+        Ok(match self {
             SshPrivateKey::Ed25519(key) => key.clone().try_sign(data)?,
             SshPrivateKey::Rsa(key) => {
                 // Note: This signs with sha512. This is not supported on all servers and needs
                 // an update once ssh-key 0.7.0 releases which adds support for other signing types.
                 key.clone().try_sign(data)?
             }
-        };
-        Ok(signature.as_bytes().to_vec())
+        })
+        .map(SshSignature)
     }
 }
 
@@ -80,19 +118,27 @@ impl TryFrom<String> for SshPrivateKey {
 
     fn try_from(pem: String) -> Result<Self, Self::Error> {
         let parsed_key = parse_key_safe(&pem)?;
-        match parsed_key.algorithm() {
-            ssh_key::Algorithm::Ed25519 => Ok(Self::Ed25519(
-                parsed_key.key_data().ed25519().unwrap().to_owned(),
-            )),
+        Self::try_from(parsed_key)
+    }
+}
+
+impl TryFrom<ssh_key::private::PrivateKey> for SshPrivateKey {
+    type Error = anyhow::Error;
+
+    fn try_from(key: ssh_key::private::PrivateKey) -> Result<Self, Self::Error> {
+        match key.algorithm() {
+            ssh_key::Algorithm::Ed25519 => {
+                Ok(Self::Ed25519(key.key_data().ed25519().unwrap().to_owned()))
+            }
             ssh_key::Algorithm::Rsa { hash: _ } => {
-                Ok(Self::Rsa(parsed_key.key_data().rsa().unwrap().to_owned()))
+                Ok(Self::Rsa(key.key_data().rsa().unwrap().to_owned()))
             }
             _ => Err(anyhow::anyhow!("Unsupported key type")),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SshPublicKey(Vec<u8>);
 
 impl From<Vec<u8>> for SshPublicKey {

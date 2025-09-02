@@ -10,7 +10,7 @@ use crate::ssh_agent::{
         agent::Agent,
         async_stream_wrapper::AsyncStreamWrapper,
         connection::ConnectionInfo,
-        replies::{AgentFailure, AgentIdentitiesReply},
+        replies::{AgentFailure, AgentIdentitiesReply, AgentSignReply},
         requests::{AgentRequest, SshSignFlags},
     },
     peerinfo::models::PeerInfo,
@@ -56,8 +56,9 @@ async fn handle_connection(
         let request = AgentRequest::try_from(stream.read_message().await?);
         let Ok(request) = request else {
             println!(
-                "[SSH Agent Connection {}] Failed to parse request",
-                connection.id()
+                "[SSH Agent Connection {}] Failed to parse request with error {}",
+                connection.id(),
+                request.err().unwrap(),
             );
             let failure_reply = AgentFailure::new()
                 .try_into()
@@ -78,16 +79,28 @@ async fn handle_connection(
             }
             AgentRequest::SignRequest(sign_request) => {
                 println!(
-                    "[SSH Agent Connection {}] Received SignRequest for key: {:?}",
+                    "[SSH Agent Connection {}] Received SignRequest {:?}",
                     connection.id(),
-                    sign_request.public_key
+                    sign_request,
                 );
-                sign_request.is_flag_set(SshSignFlags::SSH_AGENT_RSA_SHA2_256);
-                AgentFailure::new()
-                    .try_into()
+                let private_key = agent
+                    .get_private_key(sign_request.public_key)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                println!(
+                    "[SSH Agent Connection {}] Found private key for signing",
+                    connection.id()
+                );
+                AgentSignReply::new(&private_key, &sign_request.payload_to_sign)
+                    .encode()
                     .map_err(|e| anyhow::anyhow!("Failed to encode sign reply: {e}"))
             }
         }?;
+        println!(
+            "[SSH Agent Connection {}] Sending response",
+            connection.id()
+        );
 
         stream.write_reply(&response).await?;
     }

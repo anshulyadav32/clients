@@ -2,7 +2,6 @@
 pub(crate) mod agent;
 pub(crate) mod async_stream_wrapper;
 pub(crate) mod connection;
-pub(crate) mod constants;
 pub(crate) mod protocol;
 pub(crate) mod replies;
 pub(crate) mod requests;

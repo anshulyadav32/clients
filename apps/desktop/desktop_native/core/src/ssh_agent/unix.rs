@@ -14,8 +14,7 @@ use tokio::{net::UnixListener, sync::Mutex};
 use tokio_util::sync::CancellationToken;
 
 use crate::ssh_agent::{
-    agent::{agent::TestAgent, protocol},
-    peercred_unix_listener_stream::PeercredUnixListenerStream,
+    agent::protocol, peercred_unix_listener_stream::PeercredUnixListenerStream,
 };
 
 use super::{BitwardenDesktopAgent, BitwardenSshKey, SshAgentUIRequest};
@@ -93,8 +92,7 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
                     cloned_agent_state
                         .is_running
                         .store(true, std::sync::atomic::Ordering::Relaxed);
-                    let agent = TestAgent::new();
-                    protocol::serve_listener(stream, cloned_cancellation_token, agent)
+                    protocol::serve_listener(stream, cloned_cancellation_token, cloned_agent_state)
                         .await
                         .unwrap();
                     // let _ = ssh_agent::serve(

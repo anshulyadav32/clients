@@ -1,5 +1,8 @@
+use std::io::Read;
+
 use byteorder::ReadBytesExt;
 use bytes::{Buf, Bytes};
+use futures::AsyncReadExt;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use ssh_encoding::Reader;
 
@@ -75,16 +78,8 @@ impl TryFrom<&[u8]> for SshSignRequest {
     type Error = anyhow::Error;
 
     fn try_from(mut value: &[u8]) -> Result<Self, Self::Error> {
-        let mut public_key = Vec::new();
-        value
-            .read_byten(&mut public_key)
-            .map_err(|e| anyhow::anyhow!("Failed to read public key: {e}"))?;
-        let public_key = SshPublicKey::from(public_key);
-
-        let mut data = Vec::new();
-        value
-            .read_byten(&mut data)
-            .map_err(|e| anyhow::anyhow!("Failed to read data: {e}"))?;
+        let public_key = SshPublicKey::from(read_bytes(&mut value)?.to_vec());
+        let data = read_bytes(&mut value)?;
         let parsed_sign_request = parse_request(&data)?;
 
         let flags = value
@@ -127,4 +122,14 @@ pub(crate) fn parse_request(data: &[u8]) -> Result<ParsedSignRequest, anyhow::Er
     } else {
         Ok(ParsedSignRequest::SignRequest {})
     }
+}
+
+fn read_bytes(data: &mut &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+    let length = data
+        .read_u32::<byteorder::BigEndian>()
+        .map_err(|e| anyhow::anyhow!("Failed to read length: {e}"))?;
+    let mut buf = vec![0; length as usize];
+    std::io::Read::read_exact(data, &mut buf)
+        .map_err(|e| anyhow::anyhow!("Failed to read exact bytes: {e}"))?;
+    Ok(buf)
 }
