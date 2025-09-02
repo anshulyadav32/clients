@@ -14,7 +14,8 @@ use tokio::{net::UnixListener, sync::Mutex};
 use tokio_util::sync::CancellationToken;
 
 use crate::ssh_agent::{
-    agent::protocol, peercred_unix_listener_stream::PeercredUnixListenerStream,
+    agent::{agent::TestAgent, protocol},
+    peercred_unix_listener_stream::PeercredUnixListenerStream,
 };
 
 use super::{BitwardenDesktopAgent, BitwardenSshKey, SshAgentUIRequest};
@@ -92,7 +93,8 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
                     cloned_agent_state
                         .is_running
                         .store(true, std::sync::atomic::Ordering::Relaxed);
-                    protocol::serve_listener(stream, cloned_cancellation_token)
+                    let agent = TestAgent::new();
+                    protocol::serve_listener(stream, cloned_cancellation_token, agent)
                         .await
                         .unwrap();
                     // let _ = ssh_agent::serve(
@@ -124,16 +126,6 @@ mod tests {
     use std::{sync::Arc, thread::sleep};
     use tokio::sync::{broadcast, mpsc, Mutex};
 
-    const PRIVATE_ED25519_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-QyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmAAAAKByJoOYciaD
-mAAAAAtzc2gtZWQyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmA
-AAAEBQK5JpycFzP/4rchfpZhbdwxjTwHNuGx2/kvG4i6xfp0NQM7sKFkh52cgnEYD3lP9l
-PJER+1qGsUQkz954LyaYAAAAHHF1ZXh0ZW5ATWFjQm9vay1Qcm8tMTYubG9jYWwB
------END OPENSSH PRIVATE KEY-----";
-    const PUBLIC_ED25519_KEY: &str =
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIENQM7sKFkh52cgnEYD3lP9lPJER+1qGsUQkz954LyaY test-key";
-
     /// Note: Run this test with --no-capture to see the results in real-time
     #[tokio::test]
     #[ignore]
@@ -152,14 +144,6 @@ PJER+1qGsUQkz954LyaYAAAAHHF1ZXh0ZW5ATWFjQm9vay1Qcm8tMTYubG9jYWwB
         let mut agent =
             BitwardenDesktopAgent::start_server(auth_request_tx, auth_response_rx.clone()).unwrap();
 
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        agent
-            .set_keys(vec![(
-                PRIVATE_ED25519_KEY.to_string(),
-                "test-key".to_string(),
-                "my-id".to_string(),
-            )])
-            .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(20)).await;
     }
 }

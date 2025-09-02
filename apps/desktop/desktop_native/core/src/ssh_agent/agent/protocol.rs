@@ -7,19 +7,19 @@ use tokio_util::sync::CancellationToken;
 
 use crate::ssh_agent::{
     agent::{
-        agent::PublicKey,
+        agent::Agent,
         async_stream_wrapper::AsyncStreamWrapper,
-        constants::ClientRequest,
-        replies::{AgentIdentitiesReply, SshReplyFrame},
-        requests::SshAgentRequest,
+        connection::ConnectionInfo,
+        replies::{AgentFailure, AgentIdentitiesReply},
+        requests::{AgentRequest, SshSignFlags},
     },
     peerinfo::models::PeerInfo,
 };
 
-// Serves a single SSH listener, handling many connections. Only one connection can happen concurrently.
 pub async fn serve_listener<PeerStream, Listener>(
     mut listener: Listener,
     cancellation_token: CancellationToken,
+    agent: impl Agent,
 ) -> Result<(), anyhow::Error>
 where
     PeerStream: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
@@ -30,10 +30,11 @@ where
             _ = cancellation_token.cancelled() => {
                 break;
             }
-            Some(Ok((stream, info))) = listener.next() => {
+            Some(Ok((stream, peer_info))) = listener.next() => {
                 println!("[SSH Agent] Accepting connection");
                 let mut stream = AsyncStreamWrapper::new(stream);
-                if let Err(e) =  handle_request(&mut stream).await {
+                let connection_info = ConnectionInfo::new(peer_info);
+                if let Err(e) = handle_connection(&agent, &mut stream, &connection_info).await {
                     eprintln!("[SSH Agent] Error handling request: {e}");
                 }
             }
@@ -42,48 +43,53 @@ where
     Ok(())
 }
 
-async fn handle_request(
+async fn handle_connection(
+    agent: &impl Agent,
     stream: &mut AsyncStreamWrapper<impl AsyncRead + AsyncWrite + Send + Sync + Unpin>,
-) -> Result<SshReplyFrame, anyhow::Error> {
-    let message = SshAgentRequest::try_from(stream.read_message().await?)?;
-    match message.request_type()? {
-        ClientRequest::SSH_AGENTC_REQUEST_IDENTITIES => {
-            println!("[SSH Agent] Received REQUEST_IDENTITIES");
+    connection: &ConnectionInfo,
+) -> Result<(), anyhow::Error> {
+    loop {
+        println!(
+            "[SSH Agent Connection {}] Waiting for request",
+            connection.id()
+        );
+        let request = AgentRequest::try_from(stream.read_message().await?);
+        let Ok(request) = request else {
+            println!(
+                "[SSH Agent Connection {}] Failed to parse request",
+                connection.id()
+            );
+            let failure_reply = AgentFailure::new()
+                .try_into()
+                .expect("Should convert to failure reply");
+            stream.write_reply(&failure_reply).await?;
+            continue;
+        };
 
-            // Todo: Implement fetching from agent
-            let key = parse_key_safe(PRIVATE_ED25519_KEY).unwrap();
-            let keys = [PublicKey {
-                public_key_bytes: key.public_key().to_bytes().unwrap(),
-                name: "abc".into(),
-            }];
+        let response = match request {
+            AgentRequest::IdentitiesRequest => {
+                println!(
+                    "[SSH Agent Connection {}] Received IdentitiesRequest",
+                    connection.id()
+                );
+                AgentIdentitiesReply::new(agent.list_keys().await?)
+                    .encode()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode identities reply: {e}"))
+            }
+            AgentRequest::SignRequest(sign_request) => {
+                println!(
+                    "[SSH Agent Connection {}] Received SignRequest for key: {:?}",
+                    connection.id(),
+                    sign_request.public_key
+                );
+                sign_request.is_flag_set(SshSignFlags::SSH_AGENT_RSA_SHA2_256);
+                AgentFailure::new()
+                    .try_into()
+                    .map_err(|e| anyhow::anyhow!("Failed to encode sign reply: {e}"))
+            }
+        }?;
 
-            AgentIdentitiesReply::new(keys.to_vec())
-                .encode()
-                .map_err(|e| anyhow::anyhow!("Failed to encode identities reply: {e}"))
-        }
-        _ => {
-            todo!()
-        }
+        stream.write_reply(&response).await?;
     }
-}
-
-// Debug/test code:
-const PRIVATE_ED25519_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-QyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmAAAAKByJoOYciaD
-mAAAAAtzc2gtZWQyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmA
-AAAEBQK5JpycFzP/4rchfpZhbdwxjTwHNuGx2/kvG4i6xfp0NQM7sKFkh52cgnEYD3lP9l
-PJER+1qGsUQkz954LyaYAAAAHHF1ZXh0ZW5ATWFjQm9vay1Qcm8tMTYubG9jYWwB
------END OPENSSH PRIVATE KEY-----";
-
-fn parse_key_safe(pem: &str) -> Result<ssh_key::private::PrivateKey, anyhow::Error> {
-    match ssh_key::private::PrivateKey::from_openssh(pem) {
-        Ok(key) => match key.public_key().to_bytes() {
-            Ok(_) => Ok(key),
-            Err(e) => Err(anyhow::Error::msg(format!(
-                "Failed to parse public key: {e}"
-            ))),
-        },
-        Err(e) => Err(anyhow::Error::msg(format!("Failed to parse key: {e}"))),
-    }
+    Ok(())
 }

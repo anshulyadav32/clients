@@ -1,9 +1,149 @@
-#[derive(Debug, Clone)]
-pub struct PublicKey {
-    pub public_key_bytes: Vec<u8>,
-    pub name: String,
+use std::{fmt::Formatter, ops::Deref};
+
+use rsa::signature::SignerMut;
+use ssh_key::{
+    private::{Ed25519Keypair, RsaKeypair},
+    HashAlg,
+};
+use std::fmt::Debug;
+
+pub(crate) trait Agent: Send + Sync {
+    async fn list_keys(&self) -> Result<Vec<SshKeyPair>, anyhow::Error>;
 }
 
-pub(crate) trait Agent {
-    async fn list_keys(&self) -> Result<Vec<PublicKey>, anyhow::Error>;
+#[derive(Debug, Clone)]
+pub struct SshKeyPair {
+    pub public_key: SshPublicKey,
+    pub name: String,
+    // OpenSSH PEM
+    private_key: SshPrivateKey,
+}
+
+impl Deref for SshPublicKey {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub enum RsaSigningScheme {
+    Pkcs1v15Sha512,
+    Pkcs1v15Sha256,
+    Pkcs1v15Sha1,
+}
+
+#[derive(Clone)]
+pub enum SshPrivateKey {
+    Ed25519(Ed25519Keypair),
+    Rsa(RsaKeypair),
+}
+
+impl Debug for SshPrivateKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SshPrivateKey::Ed25519(_key) => write!(f, "Ed25519()"),
+            SshPrivateKey::Rsa(_key) => write!(f, "Rsa()"),
+        }
+    }
+}
+
+impl SshPrivateKey {
+    fn public_key(&self) -> SshPublicKey {
+        let private_key = match self {
+            SshPrivateKey::Ed25519(key) => ssh_key::private::PrivateKey::from(key.clone()),
+            SshPrivateKey::Rsa(key) => ssh_key::private::PrivateKey::from(key.clone()),
+        };
+
+        private_key
+            .public_key()
+            .to_bytes()
+            .map(SshPublicKey)
+            .expect("Key is always valid")
+    }
+
+    fn sign(&self, data: &[u8], _scheme: RsaSigningScheme) -> Result<Vec<u8>, anyhow::Error> {
+        let signature = match self {
+            SshPrivateKey::Ed25519(key) => key.clone().try_sign(data)?,
+            SshPrivateKey::Rsa(key) => {
+                // Note: This signs with sha512. This is not supported on all servers and needs
+                // an update once ssh-key 0.7.0 releases which adds support for other signing types.
+                key.clone().try_sign(data)?
+            }
+        };
+        Ok(signature.as_bytes().to_vec())
+    }
+}
+
+impl TryFrom<String> for SshPrivateKey {
+    type Error = anyhow::Error;
+
+    fn try_from(pem: String) -> Result<Self, Self::Error> {
+        let parsed_key = parse_key_safe(&pem)?;
+        match parsed_key.algorithm() {
+            ssh_key::Algorithm::Ed25519 => Ok(Self::Ed25519(
+                parsed_key.key_data().ed25519().unwrap().to_owned(),
+            )),
+            ssh_key::Algorithm::Rsa { hash: _ } => {
+                Ok(Self::Rsa(parsed_key.key_data().rsa().unwrap().to_owned()))
+            }
+            _ => Err(anyhow::anyhow!("Unsupported key type")),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SshPublicKey(Vec<u8>);
+
+impl From<Vec<u8>> for SshPublicKey {
+    fn from(bytes: Vec<u8>) -> Self {
+        SshPublicKey(bytes)
+    }
+}
+
+#[cfg(test)]
+const PRIVATE_ED25519_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmAAAAKByJoOYciaD
+mAAAAAtzc2gtZWQyNTUxOQAAACBDUDO7ChZIednIJxGA95T/ZTyREftahrFEJM/eeC8mmA
+AAAEBQK5JpycFzP/4rchfpZhbdwxjTwHNuGx2/kvG4i6xfp0NQM7sKFkh52cgnEYD3lP9l
+PJER+1qGsUQkz954LyaYAAAAHHF1ZXh0ZW5ATWFjQm9vay1Qcm8tMTYubG9jYWwB
+-----END OPENSSH PRIVATE KEY-----";
+
+#[cfg(test)]
+pub struct TestAgent {
+    keys: Vec<SshKeyPair>,
+}
+
+#[cfg(test)]
+impl TestAgent {
+    pub fn new() -> Self {
+        let private_key = SshPrivateKey::try_from(PRIVATE_ED25519_KEY.to_string())
+            .expect("Test key is always valid");
+        let keys = vec![SshKeyPair {
+            public_key: private_key.public_key(),
+            name: "test-key".into(),
+            private_key: private_key,
+        }];
+        Self { keys }
+    }
+}
+
+#[cfg(test)]
+impl Agent for TestAgent {
+    async fn list_keys(&self) -> Result<Vec<SshKeyPair>, anyhow::Error> {
+        Ok(self.keys.clone())
+    }
+}
+
+fn parse_key_safe(pem: &str) -> Result<ssh_key::private::PrivateKey, anyhow::Error> {
+    match ssh_key::private::PrivateKey::from_openssh(pem) {
+        Ok(key) => match key.public_key().to_bytes() {
+            Ok(_) => Ok(key),
+            Err(e) => Err(anyhow::Error::msg(format!(
+                "Failed to parse public key: {e}"
+            ))),
+        },
+        Err(e) => Err(anyhow::Error::msg(format!("Failed to parse key: {e}"))),
+    }
 }

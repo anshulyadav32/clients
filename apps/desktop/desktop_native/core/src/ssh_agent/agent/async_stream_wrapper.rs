@@ -1,6 +1,8 @@
 use ssh_encoding::Decode;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+use crate::ssh_agent::agent::replies::SshReplyFrame;
+
 pub(crate) struct AsyncStreamWrapper<PeerStream>
 where
     PeerStream: AsyncRead + AsyncWrite + Send + Sync + Unpin,
@@ -34,8 +36,10 @@ where
         self.read_vec(length).await
     }
 
-    pub async fn write_reply(&mut self, data: &[u8]) -> Result<(), anyhow::Error> {
-        self.stream.write_all(data).await?;
+    pub async fn write_reply(&mut self, data: &SshReplyFrame) -> Result<(), anyhow::Error> {
+        let raw_frame: Vec<u8> = data.into();
+        self.stream.write_u32(raw_frame.len() as u32).await?;
+        self.stream.write_all(&raw_frame).await?;
         Ok(())
     }
 }
