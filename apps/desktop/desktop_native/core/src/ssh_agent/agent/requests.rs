@@ -1,10 +1,6 @@
-use std::io::Read;
-
 use byteorder::ReadBytesExt;
 use bytes::{Buf, Bytes};
-use futures::AsyncReadExt;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use ssh_encoding::Reader;
 
 use crate::ssh_agent::agent::agent::SshPublicKey;
 
@@ -37,7 +33,6 @@ impl TryFrom<Vec<u8>> for AgentRequest {
     type Error = anyhow::Error;
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        println!("Parsing agent request from bytes: {:?}", value);
         if value.is_empty() {
             return Err(anyhow::anyhow!("Empty request"));
         }
@@ -103,7 +98,6 @@ pub(crate) enum ParsedSignRequest {
 }
 
 pub(crate) fn parse_request(data: &[u8]) -> Result<ParsedSignRequest, anyhow::Error> {
-    println!("Parsing sign request data: {:?}", data);
     let mut data = Bytes::copy_from_slice(data);
     let magic_header = "SSHSIG";
     let header = data.split_to(magic_header.len());
@@ -144,6 +138,36 @@ mod tests {
     const TEST_VECTOR_REQUEST_SIGN: &[u8] = &[13, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161, 73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120, 0, 0, 0, 146, 0, 0, 0, 32, 181, 207, 94, 63, 132, 40, 223, 192, 113, 235, 146, 168, 148, 99, 10, 232, 43, 52, 136, 115, 113, 29, 242, 9, 69, 130, 8, 140, 111, 100, 189, 9, 50, 0, 0, 0, 3, 103, 105, 116, 0, 0, 0, 14, 115, 115, 104, 45, 99, 111, 110, 110, 101, 99, 116, 105, 111, 110, 0, 0, 0, 9, 112, 117, 98, 108, 105, 99, 107, 101, 121, 1, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161, 73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120, 0, 0, 0, 0];
     const TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE: &[u8] =  &[0, 0, 0, 32, 181, 207, 94, 63, 132, 40, 223, 192, 113, 235, 146, 168, 148, 99, 10, 232, 43, 52, 136, 115, 113, 29, 242, 9, 69, 130, 8, 140, 111, 100, 189, 9, 50, 0, 0, 0, 3, 103, 105, 116, 0, 0, 0, 14, 115, 115, 104, 45, 99, 111, 110, 110, 101, 99, 116, 105, 111, 110, 0, 0, 0, 9, 112, 117, 98, 108, 105, 99, 107, 101, 121, 1, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161, 73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120];
     const TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT: &[u8] = &[83, 83, 72, 83, 73, 71, 0, 0, 0, 3, 103, 105, 116, 0, 0, 0, 0, 0, 0, 0, 6, 115, 104, 97, 53, 49, 50, 0, 0, 0, 64, 30, 64, 7, 140, 213, 231, 218, 138, 18, 144, 116, 7, 182, 82, 23, 205, 39, 91, 32, 189, 66, 61, 26, 22, 93, 175, 87, 211, 52, 127, 62, 223, 177, 70, 125, 65, 44, 147, 16, 177, 89, 5, 162, 230, 184, 137, 234, 155, 152, 93, 161, 105, 254, 223, 93, 178, 118, 238, 176, 38, 145, 49, 56, 92];
+
+    #[test]
+    fn test_parse_identities_request() {
+        let req = AgentRequest::try_from(TEST_VECTOR_REQUEST_LIST.to_vec()).expect("Should parse");
+        match req {
+            AgentRequest::IdentitiesRequest => {},
+            _ => panic!("Expected IdentitiesRequest"),
+        }
+    }
+
+    #[test]
+    fn test_parse_sign_request() {
+        let req = AgentRequest::try_from(TEST_VECTOR_REQUEST_SIGN.to_vec()).expect("Should parse");
+        match req {
+            AgentRequest::SignRequest(_) => {},
+            _ => panic!("Expected SignRequest"),
+        }
+    }
+
+    #[test]
+    fn test_parse_sign_authenticate_request() {
+        let req = parse_request(&TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE.to_vec()).expect("Should parse");
+        assert!(matches!(req, ParsedSignRequest::SignRequest {}));
+    }
+
+    #[test]
+    fn test_parse_sign_sshsig_git_request() {
+        let req = parse_request(&TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT.to_vec()).expect("Should parse");
+        assert!(matches!(req, ParsedSignRequest::SshSigRequest { namespace } if namespace == "git".to_string()));
+    }
 
     
 }
