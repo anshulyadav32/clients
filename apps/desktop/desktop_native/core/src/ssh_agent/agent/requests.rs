@@ -148,19 +148,13 @@ mod tests {
     #[test]
     fn test_parse_identities_request() {
         let req = AgentRequest::try_from(TEST_VECTOR_REQUEST_LIST.to_vec()).expect("Should parse");
-        match req {
-            AgentRequest::IdentitiesRequest => {},
-            _ => panic!("Expected IdentitiesRequest"),
-        }
+        assert!(matches!(req, AgentRequest::IdentitiesRequest));
     }
 
     #[test]
     fn test_parse_sign_request() {
         let req = AgentRequest::try_from(TEST_VECTOR_REQUEST_SIGN.to_vec()).expect("Should parse");
-        match req {
-            AgentRequest::SignRequest(_) => {},
-            _ => panic!("Expected SignRequest"),
-        }
+        assert!(matches!(req, AgentRequest::SignRequest { .. }));
     }
 
     #[test]
