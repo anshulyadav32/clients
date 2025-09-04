@@ -76,7 +76,7 @@ impl TryFrom<&[u8]> for SshSignRequest {
     fn try_from(mut value: &[u8]) -> Result<Self, Self::Error> {
         let public_key = SshPublicKey::from(read_bytes(&mut value)?.to_vec());
         let data = read_bytes(&mut value)?;
-        let parsed_sign_request = parse_request(&data)?;
+        let parsed_sign_request = ParsedSignRequest::try_from(data.as_slice())?;
 
         let flags = value
             .read_u32::<byteorder::BigEndian>()
@@ -97,26 +97,31 @@ pub(crate) enum ParsedSignRequest {
     SignRequest {},
 }
 
-pub(crate) fn parse_request(data: &[u8]) -> Result<ParsedSignRequest, anyhow::Error> {
-    let mut data = Bytes::copy_from_slice(data);
-    let magic_header = "SSHSIG";
-    let header = data.split_to(magic_header.len());
 
-    // sshsig; based on https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.sshsig
-    if header == magic_header.as_bytes() {
-        let _version = data.get_u32();
+impl<'a> TryFrom<&'a [u8]> for ParsedSignRequest {
+    type Error = anyhow::Error;
 
-        // read until null byte
-        let namespace = data
-            .into_iter()
-            .take_while(|&x| x != 0)
-            .collect::<Vec<u8>>();
-        let namespace =
-            String::from_utf8(namespace).map_err(|_| anyhow::anyhow!("Invalid namespace"))?;
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        let mut data = Bytes::copy_from_slice(data);
+        let magic_header = "SSHSIG";
+        let header = data.split_to(magic_header.len());
 
-        Ok(ParsedSignRequest::SshSigRequest { namespace })
-    } else {
-        Ok(ParsedSignRequest::SignRequest {})
+        // sshsig; based on https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.sshsig
+        if header == magic_header.as_bytes() {
+            let _version = data.get_u32();
+
+            // read until null byte
+            let namespace = data
+                .into_iter()
+                .take_while(|&x| x != 0)
+                .collect::<Vec<u8>>();
+            let namespace =
+                String::from_utf8(namespace).map_err(|_| anyhow::anyhow!("Invalid namespace"))?;
+
+            Ok(ParsedSignRequest::SshSigRequest { namespace })
+        } else {
+            Ok(ParsedSignRequest::SignRequest {})
+        }
     }
 }
 
@@ -159,14 +164,14 @@ mod tests {
 
     #[test]
     fn test_parse_sign_authenticate_request() {
-        let req = parse_request(&TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE.to_vec()).expect("Should parse");
-        assert!(matches!(req, ParsedSignRequest::SignRequest {}));
+    let req = ParsedSignRequest::try_from(TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE).expect("Should parse");
+    assert!(matches!(req, ParsedSignRequest::SignRequest {}));
     }
 
     #[test]
     fn test_parse_sign_sshsig_git_request() {
-        let req = parse_request(&TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT.to_vec()).expect("Should parse");
-        assert!(matches!(req, ParsedSignRequest::SshSigRequest { namespace } if namespace == "git".to_string()));
+    let req = ParsedSignRequest::try_from(TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT).expect("Should parse");
+    assert!(matches!(req, ParsedSignRequest::SshSigRequest { namespace } if namespace == "git".to_string()));
     }
 
     
