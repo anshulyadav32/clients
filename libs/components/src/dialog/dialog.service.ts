@@ -67,7 +67,7 @@ export type DialogConfig<D = unknown, R = unknown> = Pick<
  * A responsive position strategy that adjusts the dialog position based on the screen size.
  */
 class ResponsivePositionStrategy extends GlobalPositionStrategy {
-  onResizeListener: () => void | null = null;
+  onResizeListener: (() => void) | null = null;
 
   /**
    * The previous breakpoint to avoid unnecessary updates.
@@ -83,8 +83,10 @@ class ResponsivePositionStrategy extends GlobalPositionStrategy {
   }
 
   override dispose() {
-    window.removeEventListener("resize", this.onResizeListener);
-    this.onResizeListener = null;
+    if (this.onResizeListener) {
+      window.removeEventListener("resize", this.onResizeListener);
+      this.onResizeListener = null;
+    }
     super.dispose();
   }
 
