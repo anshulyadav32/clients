@@ -9,6 +9,7 @@ import {
   DialogService,
   DIALOG_DATA,
   DialogRef,
+  centerPositionStrategy,
 } from "@bitwarden/components";
 
 export type AdvancedUriOptionDialogParams = {
@@ -53,7 +54,7 @@ export class AdvancedUriOptionDialogComponent {
     return dialogService.open<boolean>(AdvancedUriOptionDialogComponent, {
       data: params,
       disableClose: true,
-      positionStrategy: dialogService.defaultSimpleDialogPositionStrategy,
+      positionStrategy: centerPositionStrategy,
     });
   }
 }

@@ -7,6 +7,7 @@ import {
   DialogModule,
   DialogService,
   TypographyModule,
+  centerPositionStrategy,
 } from "@bitwarden/components";
 import { I18nPipe } from "@bitwarden/ui-common";
 import { DarkImageSourceDirective, VaultCarouselModule } from "@bitwarden/vault";
@@ -48,7 +49,7 @@ export class AtRiskCarouselDialogComponent {
   static open(dialogService: DialogService) {
     return dialogService.open<AtRiskCarouselDialogResult>(AtRiskCarouselDialogComponent, {
       disableClose: true,
-      positionStrategy: dialogService.defaultSimpleDialogPositionStrategy,
+      positionStrategy: centerPositionStrategy,
     });
   }
 }

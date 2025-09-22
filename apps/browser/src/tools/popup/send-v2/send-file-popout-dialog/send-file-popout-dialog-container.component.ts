@@ -5,7 +5,7 @@ import { Component, Input, OnInit } from "@angular/core";
 
 import { JslibModule } from "@bitwarden/angular/jslib.module";
 import { SendType } from "@bitwarden/common/tools/send/enums/send-type";
-import { DialogService } from "@bitwarden/components";
+import { centerPositionStrategy, DialogService } from "@bitwarden/components";
 import { SendFormConfig } from "@bitwarden/send-ui";
 
 import { FilePopoutUtilsService } from "../../services/file-popout-utils.service";
@@ -32,7 +32,7 @@ export class SendFilePopoutDialogContainerComponent implements OnInit {
       this.filePopoutUtilsService.showFilePopoutMessage(window)
     ) {
       this.dialogService.open(SendFilePopoutDialogComponent, {
-        positionStrategy: this.dialogService.defaultSimpleDialogPositionStrategy,
+        positionStrategy: centerPositionStrategy,
       });
     }
   }

@@ -9,7 +9,7 @@ import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.servic
 import { ButtonModule } from "../../button";
 import { I18nMockService } from "../../utils/i18n-mock.service";
 import { DialogModule } from "../dialog.module";
-import { DialogService } from "../dialog.service";
+import { centerPositionStrategy, DialogService } from "../dialog.service";
 
 interface Animal {
   animal: string;
@@ -35,7 +35,7 @@ class StoryDialogComponent {
       data: {
         animal: "panda",
       },
-      positionStrategy: this.dialogService.defaultSimpleDialogPositionStrategy,
+      positionStrategy: centerPositionStrategy,
     });
   }
 
@@ -45,7 +45,7 @@ class StoryDialogComponent {
         animal: "panda",
       },
       disableClose: true,
-      positionStrategy: this.dialogService.defaultSimpleDialogPositionStrategy,
+      positionStrategy: centerPositionStrategy,
     });
   }
 
@@ -55,7 +55,7 @@ class StoryDialogComponent {
         animal: "panda",
       },
       disableClose: true,
-      positionStrategy: this.dialogService.defaultSimpleDialogPositionStrategy,
+      positionStrategy: centerPositionStrategy,
     });
   }
 }

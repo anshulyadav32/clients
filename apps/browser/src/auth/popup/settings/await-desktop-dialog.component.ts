@@ -1,7 +1,12 @@
 import { Component } from "@angular/core";
 
 import { JslibModule } from "@bitwarden/angular/jslib.module";
-import { ButtonModule, DialogModule, DialogService } from "@bitwarden/components";
+import {
+  ButtonModule,
+  centerPositionStrategy,
+  DialogModule,
+  DialogService,
+} from "@bitwarden/components";
 
 @Component({
   templateUrl: "await-desktop-dialog.component.html",
@@ -10,7 +15,7 @@ import { ButtonModule, DialogModule, DialogService } from "@bitwarden/components
 export class AwaitDesktopDialogComponent {
   static open(dialogService: DialogService) {
     return dialogService.open<boolean>(AwaitDesktopDialogComponent, {
-      positionStrategy: dialogService.defaultSimpleDialogPositionStrategy,
+      positionStrategy: centerPositionStrategy,
     });
   }
 }
