@@ -91,7 +91,7 @@ class ResponsivePositionStrategy extends GlobalPositionStrategy {
   }
 
   updatePosition() {
-    const isSmallScreen = window.matchMedia("(max-width: 768px)").matches;
+    const isSmallScreen = window?.matchMedia?.("(max-width: 768px)")?.matches ?? false;
     const currentBreakpoint = isSmallScreen ? "small" : "large";
     if (this.prevBreakpoint === currentBreakpoint) {
       return; // No change in breakpoint, no need to update position
