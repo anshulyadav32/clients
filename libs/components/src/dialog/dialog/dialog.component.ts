@@ -131,6 +131,9 @@ export class DialogComponent {
   }
 
   protected animationClasses = computed(() => {
+    if (!this.dialogRef || this.dialogRef?.isDrawer) {
+      return [];
+    }
     switch (this.dialogSize()) {
       case "small":
         return ["tw-animate-slide-down"];
