@@ -3,7 +3,7 @@ import { Component } from "@angular/core";
 import { JslibModule } from "@bitwarden/angular/jslib.module";
 import {
   ButtonModule,
-  centerPositionStrategy,
+  CenterPositionStrategy,
   DialogModule,
   DialogService,
 } from "@bitwarden/components";
@@ -15,7 +15,7 @@ import {
 export class AwaitDesktopDialogComponent {
   static open(dialogService: DialogService) {
     return dialogService.open<boolean>(AwaitDesktopDialogComponent, {
-      positionStrategy: centerPositionStrategy,
+      positionStrategy: new CenterPositionStrategy(),
     });
   }
 }

@@ -8,7 +8,7 @@ import {
   ButtonModule,
   DialogModule,
   DialogService,
-  centerPositionStrategy,
+  CenterPositionStrategy,
 } from "@bitwarden/components";
 
 export type FingerprintDialogData = {
@@ -25,7 +25,7 @@ export class FingerprintDialogComponent {
   static open(dialogService: DialogService, data: FingerprintDialogData) {
     return dialogService.open(FingerprintDialogComponent, {
       data,
-      positionStrategy: centerPositionStrategy,
+      positionStrategy: new CenterPositionStrategy(),
     });
   }
 }

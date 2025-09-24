@@ -13,7 +13,7 @@ import {
   DialogModule,
   DialogService,
   TypographyModule,
-  centerPositionStrategy,
+  CenterPositionStrategy,
 } from "@bitwarden/components";
 
 export type DecryptionFailureDialogParams = {
@@ -57,7 +57,7 @@ export class DecryptionFailureDialogComponent {
   static open(dialogService: DialogService, params: DecryptionFailureDialogParams) {
     return dialogService.open(DecryptionFailureDialogComponent, {
       data: params,
-      positionStrategy: centerPositionStrategy,
+      positionStrategy: new CenterPositionStrategy(),
     });
   }
 }

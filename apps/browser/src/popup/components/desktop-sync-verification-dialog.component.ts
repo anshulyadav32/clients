@@ -9,7 +9,7 @@ import {
   ButtonModule,
   DialogModule,
   DialogService,
-  centerPositionStrategy,
+  CenterPositionStrategy,
 } from "@bitwarden/components";
 
 export type DesktopSyncVerificationDialogParams = {
@@ -48,7 +48,7 @@ export class DesktopSyncVerificationDialogComponent implements OnDestroy, OnInit
   static open(dialogService: DialogService, data: DesktopSyncVerificationDialogParams) {
     return dialogService.open(DesktopSyncVerificationDialogComponent, {
       data,
-      positionStrategy: centerPositionStrategy,
+      positionStrategy: new CenterPositionStrategy(),
     });
   }
 }

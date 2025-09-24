@@ -106,9 +106,12 @@ class ResponsivePositionStrategy extends GlobalPositionStrategy {
   }
 }
 
-export const centerPositionStrategy = new GlobalPositionStrategy()
-  .centerHorizontally()
-  .centerVertically();
+export class CenterPositionStrategy extends GlobalPositionStrategy {
+  constructor() {
+    super();
+    this.centerHorizontally().centerVertically();
+  }
+}
 
 class DrawerDialogRef<R = unknown, C = unknown> implements DialogRef<R, C> {
   readonly isDrawer = true;
@@ -275,7 +278,7 @@ export class DialogService {
     return this.open<boolean, SimpleDialogOptions>(SimpleConfigurableDialogComponent, {
       data: simpleDialogOptions,
       disableClose: simpleDialogOptions.disableClose,
-      positionStrategy: centerPositionStrategy,
+      positionStrategy: new CenterPositionStrategy(),
     });
   }
 
