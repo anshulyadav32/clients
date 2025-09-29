@@ -15,6 +15,7 @@ import {
   MasterKeyWrappedUserKey,
   MasterPasswordAuthenticationHash,
   MasterPasswordSalt,
+  MasterPasswordUnlockData,
 } from "../master-password/types/master-password.types";
 
 import { ChangeKdfApiService } from "./change-kdf-api.service.abstraction";
@@ -135,11 +136,13 @@ describe("ChangeKdfService", () => {
           masterPasswordAuthenticationHash: mockNewHash,
         });
 
-      masterPasswordService.makeMasterPasswordUnlockData.mockResolvedValueOnce({
-        kdf: mockNewKdfConfig,
-        salt: mockSalt,
-        masterKeyWrappedUserKey: mockWrappedUserKey.encryptedString as MasterKeyWrappedUserKey,
-      });
+      masterPasswordService.makeMasterPasswordUnlockData.mockResolvedValueOnce(
+        new MasterPasswordUnlockData(
+          mockSalt,
+          mockNewKdfConfig,
+          mockWrappedUserKey.encryptedString as MasterKeyWrappedUserKey,
+        ),
+      );
 
       await sut.updateUserKdfParams("masterPassword", mockNewKdfConfig, mockUserId);
 
@@ -149,11 +152,11 @@ describe("ChangeKdfService", () => {
           kdf: mockNewKdfConfig,
           masterPasswordAuthenticationHash: mockNewHash,
         },
-        {
-          kdf: mockNewKdfConfig,
-          salt: mockSalt,
-          masterKeyWrappedUserKey: mockWrappedUserKey.encryptedString as MasterKeyWrappedUserKey,
-        },
+        new MasterPasswordUnlockData(
+          mockSalt,
+          mockNewKdfConfig,
+          mockWrappedUserKey.encryptedString as MasterKeyWrappedUserKey,
+        ),
       ).authenticateWith({
         salt: mockSalt,
         kdf: mockOldKdfConfig,
