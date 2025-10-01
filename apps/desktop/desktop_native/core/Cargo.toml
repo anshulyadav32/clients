@@ -41,6 +41,7 @@ rsa = { workspace = true }
 russh-cryptovec = { workspace = true }
 scopeguard = { workspace = true }
 sha1 = { version = "0.10.6", features = ["oid"] }
+secmem-proc = { workspace = true }
 sha2 = { workspace = true }
 ssh-encoding = { workspace = true }
 ssh-key = { workspace = true, features = [
@@ -54,6 +55,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "sync", "macros", "net"] }
 tokio-stream = { workspace = true, features = ["net"] }
 tokio-util = { workspace = true, features = ["codec"] }
+tracing = { workspace = true }
 typenum = { workspace = true }
 zeroizing-alloc = { workspace = true }
 

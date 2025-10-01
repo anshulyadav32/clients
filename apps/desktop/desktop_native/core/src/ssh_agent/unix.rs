@@ -12,6 +12,7 @@ use bitwarden_russh::ssh_agent;
 use homedir::my_home;
 use tokio::{net::UnixListener, sync::Mutex};
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
 use crate::ssh_agent::{
     agent::protocol, peercred_unix_listener_stream::PeercredUnixListenerStream,
@@ -38,14 +39,12 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
             let ssh_path = match std::env::var("BITWARDEN_SSH_AUTH_SOCK") {
                 Ok(path) => path,
                 Err(_) => {
-                    println!("[SSH Agent Native Module] BITWARDEN_SSH_AUTH_SOCK not set, using default path");
+                    info!("BITWARDEN_SSH_AUTH_SOCK not set, using default path");
 
                     let ssh_agent_directory = match my_home() {
                         Ok(Some(home)) => home,
                         _ => {
-                            println!(
-                                "[SSH Agent Native Module] Could not determine home directory"
-                            );
+                            info!("Could not determine home directory");
                             return;
                         }
                     };
@@ -67,10 +66,10 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
                 }
             };
 
-            println!("[SSH Agent Native Module] Starting SSH Agent server on {ssh_path:?}");
+            info!(socket = %ssh_path, "Starting SSH Agent server");
             let sockname = std::path::Path::new(&ssh_path);
             if let Err(e) = std::fs::remove_file(sockname) {
-                println!("[SSH Agent Native Module] Could not remove existing socket file: {e}");
+                error!(error = %e, socket = %ssh_path, "Could not remove existing socket file");
                 if e.kind() != std::io::ErrorKind::NotFound {
                     return;
                 }
@@ -81,7 +80,7 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
                     // Only the current user should be able to access the socket
                     if let Err(e) = fs::set_permissions(sockname, fs::Permissions::from_mode(0o600))
                     {
-                        println!("[SSH Agent Native Module] Could not set socket permissions: {e}");
+                        error!(error = %e, socket = ?sockname, "Could not set socket permissions");
                         return;
                     }
 
@@ -108,7 +107,7 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
                     println!("[SSH Agent Native Module] SSH Agent server exited");
                 }
                 Err(e) => {
-                    eprintln!("[SSH Agent Native Module] Error while starting agent server: {e}");
+                    error!(error = %e, socket = %ssh_path, "Unable to start start agent server");
                 }
             }
         });

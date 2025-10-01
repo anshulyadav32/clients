@@ -11,6 +11,7 @@ use bitwarden_russh::{
     session_bind::SessionBindResult,
     ssh_agent::{self, SshKey},
 };
+use tracing::{error, info};
 
 use crate::ssh_agent::agent::agent::{Agent, SshPrivateKey};
 
@@ -90,7 +91,7 @@ impl ssh_agent::Agent<peerinfo::models::PeerInfo, BitwardenSshKey>
         info: &peerinfo::models::PeerInfo,
     ) -> bool {
         if !self.is_running() {
-            println!("[BitwardenDesktopAgent] Agent is not running, but tried to call confirm");
+            error!("Agent is not running, but tried to call confirm");
             return false;
         }
 
@@ -98,7 +99,7 @@ impl ssh_agent::Agent<peerinfo::models::PeerInfo, BitwardenSshKey>
         let request_data = match request_parser::parse_request(data) {
             Ok(data) => data,
             Err(e) => {
-                println!("[SSH Agent] Error while parsing request: {e}");
+                error!(error = %e, "Error while parsing request");
                 return false;
             }
         };
@@ -109,12 +110,12 @@ impl ssh_agent::Agent<peerinfo::models::PeerInfo, BitwardenSshKey>
             _ => None,
         };
 
-        println!(
-            "[SSH Agent] Confirming request from application: {}, is_forwarding: {}, namespace: {}, host_key: {}",
+        info!(
+            is_forwarding = %info.is_forwarding(),
+            namespace = ?namespace.as_ref(),
+            host_key = %STANDARD.encode(info.host_key()),
+            "Confirming request from application: {}",
             info.process_name(),
-            info.is_forwarding(),
-            namespace.clone().unwrap_or_default(),
-            STANDARD.encode(info.host_key())
         );
 
         let mut rx_channel = self.get_ui_response_rx.lock().await.resubscribe();
@@ -176,7 +177,7 @@ impl ssh_agent::Agent<peerinfo::models::PeerInfo, BitwardenSshKey>
                 connection_info.set_host_key(session_bind_info.host_key.clone());
             }
             SessionBindResult::SignatureFailure => {
-                println!("[BitwardenDesktopAgent] Session bind failure: Signature failure");
+                error!("Session bind failure: Signature failure");
             }
         }
     }
@@ -205,7 +206,7 @@ impl Agent for BitwardenDesktopAgent<BitwardenSshKey> {
 impl BitwardenDesktopAgent<BitwardenSshKey> {
     pub fn stop(&self) {
         if !self.is_running() {
-            println!("[BitwardenDesktopAgent] Tried to stop agent while it is not running");
+            error!("Tried to stop agent while it is not running");
             return;
         }
 
@@ -251,7 +252,7 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
                     );
                 }
                 Err(e) => {
-                    eprintln!("[SSH Agent Native Module] Error while parsing key: {e}");
+                    error!(error=%e, "Error while parsing key");
                 }
             }
         }
@@ -289,7 +290,7 @@ impl BitwardenDesktopAgent<BitwardenSshKey> {
 
     fn get_request_id(&self) -> u32 {
         if !self.is_running() {
-            println!("[BitwardenDesktopAgent] Agent is not running, but tried to get request id");
+            error!("Agent is not running, but tried to get request id");
             return 0;
         }
 
