@@ -1,3 +1,6 @@
+//! This file contains parsing logic for requests sent to the SSH agent.
+//! Parsers must include test vectors recorded from real SSH operations.
+
 use byteorder::ReadBytesExt;
 use bytes::{Buf, Bytes};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -9,7 +12,7 @@ use crate::ssh_agent::agent::agent::SshPublicKey;
 #[allow(non_camel_case_types)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive, Default)]
 #[repr(u8)]
-pub enum RequestType {
+pub(crate) enum RequestType {
     /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-requesting-a-list-of-keys`
     /// Request the list of keys the agent is holding
     SSH_AGENTC_REQUEST_IDENTITIES = 11,
@@ -32,53 +35,58 @@ pub enum RequestType {
 #[allow(non_camel_case_types)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
-pub enum SshSignFlags {
+pub(crate) enum SshSignFlags {
+    /// Sign with SHA256 if RSA is used
     SSH_AGENT_RSA_SHA2_256 = 2,
+    /// Sign with SHA512 if RSA is used
     SSH_AGENT_RSA_SHA2_512 = 4,
 }
 
 #[derive(Debug)]
 pub(crate) enum Request {
+    /// Request the list of keys the agent is holding
     IdentitiesRequest,
+    /// Sign an authentication request or SSHSIG request
     SignRequest(SshSignRequest),
 }
 
-impl TryFrom<Vec<u8>> for Request {
+impl TryFrom<&[u8]> for Request {
     type Error = anyhow::Error;
 
     // A protocol message consists of
+    //
     // uint32 length
     // byte type
     // byte[length-1] contents
     //
     // The length is already stripped of in the `async_stream_wrapper::read_message`, so
     // the message is just type|contents.
-    fn try_from(message: Vec<u8>) -> Result<Self, Self::Error> {
+    fn try_from(message: &[u8]) -> Result<Self, Self::Error> {
         if message.is_empty() {
             return Err(anyhow::anyhow!("Empty request"));
         }
 
-        let r#type = RequestType::try_from_primitive(message[0])
-            .map_err(|_| anyhow::anyhow!("Failed to parse request type"))?;
+        let r#type = RequestType::try_from_primitive(message[0])?;
         let contents = message[1..].to_vec();
 
         match r#type {
             RequestType::SSH_AGENTC_REQUEST_IDENTITIES => Ok(Request::IdentitiesRequest),
             RequestType::SSH_AGENTC_SIGN_REQUEST => {
-                let sign_request = SshSignRequest::try_from(contents.as_slice())
-                    .map_err(|e| anyhow::anyhow!("Failed to parse sign request: {e}"))?;
-                Ok(Request::SignRequest(sign_request))
+                Ok(Request::SignRequest(contents.as_slice().try_into()?))
             }
             _ => Err(anyhow::anyhow!("Unsupported request type: {:?}", r#type)),
         }
     }
 }
 
+/// A sign request requests the agent to sign a blob of data with a specific key. The key is
+/// referenced by its public key blob. The payload usually has a specific structure for auth
+/// requests or SSHSIG requests. There are also flags supported that control signing behavior.
 #[derive(Debug)]
 pub(crate) struct SshSignRequest {
-    pub(crate) public_key: SshPublicKey,
-    pub(crate) payload_to_sign: Vec<u8>,
-    pub(crate) parsed_sign_request: ParsedSignRequest,
+    public_key: SshPublicKey,
+    payload_to_sign: Vec<u8>,
+    parsed_sign_request: ParsedSignRequest,
     flags: u32,
 }
 
@@ -86,24 +94,43 @@ impl SshSignRequest {
     pub fn is_flag_set(&self, flag: SshSignFlags) -> bool {
         (self.flags & (flag as u32)) != 0
     }
+
+    pub fn public_key(&self) -> &SshPublicKey {
+        &self.public_key
+    }
+
+    pub fn payload_to_sign(&self) -> &[u8] {
+        &self.payload_to_sign
+    }
+
+    pub fn parsed_payload(&self) -> &ParsedSignRequest {
+        &self.parsed_sign_request
+    }
 }
 
 impl TryFrom<&[u8]> for SshSignRequest {
     type Error = anyhow::Error;
 
-    fn try_from(mut value: &[u8]) -> Result<Self, Self::Error> {
-        let public_key = SshPublicKey::from(read_bytes(&mut value)?.to_vec());
-        let data = read_bytes(&mut value)?;
-        let parsed_sign_request = ParsedSignRequest::try_from(data.as_slice())?;
-
-        let flags = value
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-private-key-operations`
+    ///  A private key operation is structured as follows:
+    ///
+    ///  byte             SSH_AGENTC_SIGN_REQUEST
+    ///  string           key blob
+    ///  string           data
+    ///  uint32           flags
+    ///
+    /// In this case, the message already has the leading byte stripped off by the previous parsing code.
+    fn try_from(mut message: &[u8]) -> Result<Self, Self::Error> {
+        let public_key_blob = read_bytes(&mut message)?.to_vec();
+        let data = read_bytes(&mut message)?;
+        let flags = message
             .read_u32::<byteorder::BigEndian>()
             .map_err(|e| anyhow::anyhow!("Failed to read flags from sign request: {e}"))?;
 
         Ok(SshSignRequest {
-            public_key: public_key,
-            payload_to_sign: data,
-            parsed_sign_request,
+            public_key: public_key_blob.into(),
+            payload_to_sign: data.clone(),
+            parsed_sign_request: data.as_slice().try_into()?,
             flags,
         })
     }
@@ -114,7 +141,6 @@ pub(crate) enum ParsedSignRequest {
     SshSigRequest { namespace: String },
     SignRequest {},
 }
-
 
 impl<'a> TryFrom<&'a [u8]> for ParsedSignRequest {
     type Error = anyhow::Error;
@@ -143,11 +169,17 @@ impl<'a> TryFrom<&'a [u8]> for ParsedSignRequest {
     }
 }
 
+/// A helper function to read a length prefixed byte array
 fn read_bytes(data: &mut &[u8]) -> Result<Vec<u8>, anyhow::Error> {
     let length = data
         .read_u32::<byteorder::BigEndian>()
         .map_err(|e| anyhow::anyhow!("Failed to read length: {e}"))?;
-    let mut buf = vec![0; length as usize];
+    let mut buf = vec![
+        0;
+        length
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Invalid length"))?
+    ];
     std::io::Read::read_exact(data, &mut buf)
         .map_err(|e| anyhow::anyhow!("Failed to read exact bytes: {e}"))?;
     Ok(buf)
@@ -157,35 +189,64 @@ fn read_bytes(data: &mut &[u8]) -> Result<Vec<u8>, anyhow::Error> {
 mod tests {
     use super::*;
 
+    // Protocol Request Messages
     const TEST_VECTOR_REQUEST_LIST: &[u8] = &[11];
-    const TEST_VECTOR_REQUEST_SIGN: &[u8] = &[13, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161, 73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120, 0, 0, 0, 146, 0, 0, 0, 32, 181, 207, 94, 63, 132, 40, 223, 192, 113, 235, 146, 168, 148, 99, 10, 232, 43, 52, 136, 115, 113, 29, 242, 9, 69, 130, 8, 140, 111, 100, 189, 9, 50, 0, 0, 0, 3, 103, 105, 116, 0, 0, 0, 14, 115, 115, 104, 45, 99, 111, 110, 110, 101, 99, 116, 105, 111, 110, 0, 0, 0, 9, 112, 117, 98, 108, 105, 99, 107, 101, 121, 1, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161, 73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120, 0, 0, 0, 0];
-    // Inner packets for the sign request
-    const TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE: &[u8] =  &[0, 0, 0, 32, 181, 207, 94, 63, 132, 40, 223, 192, 113, 235, 146, 168, 148, 99, 10, 232, 43, 52, 136, 115, 113, 29, 242, 9, 69, 130, 8, 140, 111, 100, 189, 9, 50, 0, 0, 0, 3, 103, 105, 116, 0, 0, 0, 14, 115, 115, 104, 45, 99, 111, 110, 110, 101, 99, 116, 105, 111, 110, 0, 0, 0, 9, 112, 117, 98, 108, 105, 99, 107, 101, 121, 1, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161, 73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120];
-    const TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT: &[u8] = &[83, 83, 72, 83, 73, 71, 0, 0, 0, 3, 103, 105, 116, 0, 0, 0, 0, 0, 0, 0, 6, 115, 104, 97, 53, 49, 50, 0, 0, 0, 64, 30, 64, 7, 140, 213, 231, 218, 138, 18, 144, 116, 7, 182, 82, 23, 205, 39, 91, 32, 189, 66, 61, 26, 22, 93, 175, 87, 211, 52, 127, 62, 223, 177, 70, 125, 65, 44, 147, 16, 177, 89, 5, 162, 230, 184, 137, 234, 155, 152, 93, 161, 105, 254, 223, 93, 178, 118, 238, 176, 38, 145, 49, 56, 92];
+    const TEST_VECTOR_REQUEST_SIGN: &[u8] = &[
+        13, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32,
+        29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161, 73, 110, 213,
+        155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120, 0, 0, 0, 146, 0, 0, 0, 32,
+        181, 207, 94, 63, 132, 40, 223, 192, 113, 235, 146, 168, 148, 99, 10, 232, 43, 52, 136,
+        115, 113, 29, 242, 9, 69, 130, 8, 140, 111, 100, 189, 9, 50, 0, 0, 0, 3, 103, 105, 116, 0,
+        0, 0, 14, 115, 115, 104, 45, 99, 111, 110, 110, 101, 99, 116, 105, 111, 110, 0, 0, 0, 9,
+        112, 117, 98, 108, 105, 99, 107, 101, 121, 1, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50,
+        53, 53, 49, 57, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57,
+        0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125, 161,
+        73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120, 0, 0, 0, 0,
+    ];
+
+    // Inner messages for the sign request
+    const TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE: &[u8] = &[
+        0, 0, 0, 32, 181, 207, 94, 63, 132, 40, 223, 192, 113, 235, 146, 168, 148, 99, 10, 232, 43,
+        52, 136, 115, 113, 29, 242, 9, 69, 130, 8, 140, 111, 100, 189, 9, 50, 0, 0, 0, 3, 103, 105,
+        116, 0, 0, 0, 14, 115, 115, 104, 45, 99, 111, 110, 110, 101, 99, 116, 105, 111, 110, 0, 0,
+        0, 9, 112, 117, 98, 108, 105, 99, 107, 101, 121, 1, 0, 0, 0, 11, 115, 115, 104, 45, 101,
+        100, 50, 53, 53, 49, 57, 0, 0, 0, 51, 0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53,
+        49, 57, 0, 0, 0, 32, 29, 223, 117, 159, 179, 182, 138, 116, 19, 26, 175, 28, 112, 116, 125,
+        161, 73, 110, 213, 155, 210, 209, 216, 151, 51, 134, 209, 95, 89, 119, 233, 120,
+    ];
+    const TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT: &[u8] = &[
+        83, 83, 72, 83, 73, 71, 0, 0, 0, 3, 103, 105, 116, 0, 0, 0, 0, 0, 0, 0, 6, 115, 104, 97,
+        53, 49, 50, 0, 0, 0, 64, 30, 64, 7, 140, 213, 231, 218, 138, 18, 144, 116, 7, 182, 82, 23,
+        205, 39, 91, 32, 189, 66, 61, 26, 22, 93, 175, 87, 211, 52, 127, 62, 223, 177, 70, 125, 65,
+        44, 147, 16, 177, 89, 5, 162, 230, 184, 137, 234, 155, 152, 93, 161, 105, 254, 223, 93,
+        178, 118, 238, 176, 38, 145, 49, 56, 92,
+    ];
 
     #[test]
     fn test_parse_identities_request() {
-        let req = AgentRequest::try_from(TEST_VECTOR_REQUEST_LIST.to_vec()).expect("Should parse");
-        assert!(matches!(req, AgentRequest::IdentitiesRequest));
+        let req = Request::try_from(TEST_VECTOR_REQUEST_LIST).expect("Should parse");
+        assert!(matches!(req, Request::IdentitiesRequest));
     }
 
     #[test]
     fn test_parse_sign_request() {
-        let req = AgentRequest::try_from(TEST_VECTOR_REQUEST_SIGN.to_vec()).expect("Should parse");
-        assert!(matches!(req, AgentRequest::SignRequest { .. }));
+        let req = Request::try_from(TEST_VECTOR_REQUEST_SIGN).expect("Should parse");
+        assert!(matches!(req, Request::SignRequest { .. }));
     }
 
     #[test]
     fn test_parse_sign_authenticate_request() {
-    let req = ParsedSignRequest::try_from(TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE).expect("Should parse");
-    assert!(matches!(req, ParsedSignRequest::SignRequest {}));
+        let req = ParsedSignRequest::try_from(TEST_VECTOR_REQUEST_SIGN_AUTHENTICATE)
+            .expect("Should parse");
+        assert!(matches!(req, ParsedSignRequest::SignRequest {}));
     }
 
     #[test]
     fn test_parse_sign_sshsig_git_request() {
-    let req = ParsedSignRequest::try_from(TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT).expect("Should parse");
-    assert!(matches!(req, ParsedSignRequest::SshSigRequest { namespace } if namespace == "git".to_string()));
+        let req =
+            ParsedSignRequest::try_from(TEST_VECTOR_REQUEST_SIGN_SSHSIG_GIT).expect("Should parse");
+        assert!(
+            matches!(req, ParsedSignRequest::SshSigRequest { namespace } if namespace == "git".to_string())
+        );
     }
-
-    
 }

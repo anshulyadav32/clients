@@ -10,8 +10,8 @@ use crate::ssh_agent::{
         agent::Agent,
         async_stream_wrapper::AsyncStreamWrapper,
         connection::ConnectionInfo,
-        replies::{AgentFailure, AgentIdentitiesReply, AgentSignReply},
-        requests::{Request, SshSignFlags},
+        replies::{AgentFailure, IdentitiesReply, SshSignReply},
+        requests::Request,
     },
     peerinfo::models::PeerInfo,
 };
@@ -53,7 +53,7 @@ async fn handle_connection(
             "[SSH Agent Connection {}] Waiting for request",
             connection.id()
         );
-        let request = Request::try_from(stream.read_message().await?);
+        let request = Request::try_from(stream.read_message().await?.as_slice());
         let Ok(request) = request else {
             println!(
                 "[SSH Agent Connection {}] Failed to parse request with error {}",
@@ -73,7 +73,7 @@ async fn handle_connection(
                     "[SSH Agent Connection {}] Received IdentitiesRequest",
                     connection.id()
                 );
-                AgentIdentitiesReply::new(agent.list_keys().await?)
+                IdentitiesReply::new(agent.list_keys().await?)
                     .encode()
                     .map_err(|e| anyhow::anyhow!("Failed to encode identities reply: {e}"))
             }
@@ -84,7 +84,7 @@ async fn handle_connection(
                     sign_request,
                 );
                 let private_key = agent
-                    .get_private_key(sign_request.public_key)
+                    .get_private_key(sign_request.public_key())
                     .await
                     .unwrap()
                     .unwrap();
@@ -92,7 +92,7 @@ async fn handle_connection(
                     "[SSH Agent Connection {}] Found private key for signing",
                     connection.id()
                 );
-                AgentSignReply::new(&private_key, &sign_request.payload_to_sign)
+                SshSignReply::new(&private_key, &sign_request.payload_to_sign())
                     .encode()
                     .map_err(|e| anyhow::anyhow!("Failed to encode sign reply: {e}"))
             }

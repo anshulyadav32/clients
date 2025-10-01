@@ -12,11 +12,11 @@ pub(crate) trait Agent: Send + Sync {
     async fn list_keys(&self) -> Result<Vec<SshKeyPair>, anyhow::Error>;
     async fn get_private_key(
         &self,
-        public_key: SshPublicKey,
+        public_key: &SshPublicKey,
     ) -> Result<Option<SshPrivateKey>, anyhow::Error> {
         let keys = self.list_keys().await?;
         for key in keys {
-            if key.public_key == public_key {
+            if key.public_key == *public_key {
                 return Ok(Some(key.private_key));
             }
         }

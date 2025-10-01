@@ -3,66 +3,113 @@ use ssh_encoding::Encode;
 
 use crate::ssh_agent::agent::agent::{RsaSigningScheme, SshKeyPair, SshPrivateKey, SshSignature};
 
+/// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-protocol-messages`
+/// The different types of replies that the SSH agent can send to a client.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive, Default)]
 #[repr(u8)]
-pub enum AgentReply {
+pub enum ReplyType {
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-generic-server-responses`
+    /// Generic response indicating failure
+    /// Unsupported extensions must be replied to with SSH_AGENT_FAILURE.
     SSH_AGENT_FAILURE = 5,
+    /// Generic response indicating success
     SSH_AGENT_SUCCESS = 6,
+
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-extension-mechanism`
+    /// Failure within an extension are replied to with this message.
     SSH_AGENT_EXTENSION_FAILURE = 28,
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-requesting-a-list-of-keys`
+    /// Response to `RequestType::SSH_AGENTC_REQUEST_IDENTITIES`
     SSH_AGENT_IDENTITIES_ANSWER = 12,
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-private-key-operations``
+    /// Response to `RequestType::SSH_AGENTC_SIGN_REQUEST`
     SSH_AGENT_SIGN_RESPONSE = 14,
+    /// Invalid reply type
     #[default]
     SSH_AGENT_INVALID = 0,
 }
 
-pub(crate) struct AgentIdentitiesReply {
+/// A reply is structured as a single byte indicating the type, followed by a
+/// payload that is structured according to the type.
+pub struct ReplyFrame {
+    /// The serialized frame structured as
+    /// reply_type|payload
+    raw_frame: Vec<u8>,
+}
+
+impl ReplyFrame {
+    pub fn new(reply: ReplyType, payload: Vec<u8>) -> Self {
+        let mut raw_frame = Vec::new();
+        Into::<u8>::into(reply)
+            .encode(&mut raw_frame)
+            .expect("Encoding into Vec cannot fail");
+        raw_frame.extend_from_slice(&payload);
+        Self { raw_frame }
+    }
+}
+
+impl Into<Vec<u8>> for &ReplyFrame {
+    fn into(self) -> Vec<u8> {
+        self.raw_frame.clone()
+    }
+}
+
+pub(crate) struct IdentitiesReply {
     keys: Vec<SshKeyPair>,
 }
 
-impl AgentIdentitiesReply {
+impl IdentitiesReply {
     pub fn new(keys: Vec<SshKeyPair>) -> Self {
         Self { keys }
     }
 
-    pub fn encode(&self) -> Result<SshReplyFrame, ssh_encoding::Error> {
-        println!(
-            "[SSH Agent] Encoding identities reply with {} keys",
-            self.keys.len()
-        );
-
-        // The Reply frame consists of the number of keys, followed by each key's public key and name
-        let mut reply_message = Vec::new();
-        (self.keys.len() as u32).encode(&mut reply_message)?;
-        for key in &self.keys {
-            key.public_key.encode(&mut reply_message)?;
-            key.name.encode(&mut reply_message)?;
-        }
-
-        Ok(SshReplyFrame::new(
-            AgentReply::SSH_AGENT_IDENTITIES_ANSWER,
-            reply_message,
-        ))
+    /// https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-requesting-a-list-of-keys
+    /// The reply to a request is structured as:
+    ///
+    /// byte SSH_AGENT_IDENTITIES_ANSWER
+    /// uint32 nkeys
+    /// [
+    ///   string public key blob
+    ///   string comment (a utf-8 string)
+    ///   ... (nkeys times)
+    /// ]
+    pub fn encode(&self) -> Result<ReplyFrame, ssh_encoding::Error> {
+        Ok(ReplyFrame::new(ReplyType::SSH_AGENT_IDENTITIES_ANSWER, {
+            let mut reply_message = Vec::new();
+            (self.keys.len() as u32).encode(&mut reply_message)?;
+            for key in &self.keys {
+                key.public_key.encode(&mut reply_message)?;
+                key.name.encode(&mut reply_message)?;
+            }
+            reply_message
+        }))
     }
 }
 
-pub(crate) struct AgentSignReply(SshSignature);
-impl AgentSignReply {
+pub(crate) struct SshSignReply(SshSignature);
+
+impl SshSignReply {
     pub fn new(private_key: &SshPrivateKey, data: &[u8]) -> Self {
         Self(
+            // Note, this should take into account the extension / signing scheme.
             private_key
                 .sign(data, RsaSigningScheme::Pkcs1v15Sha512)
                 .unwrap(),
         )
     }
 
-    pub fn encode(&self) -> Result<SshReplyFrame, ssh_encoding::Error> {
-        let mut reply_payload = Vec::new();
-        self.0.encode().unwrap().encode(&mut reply_payload)?;
-        Ok(SshReplyFrame::new(
-            AgentReply::SSH_AGENT_SIGN_RESPONSE,
-            reply_payload,
-        ))
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-private-key-operations`
+    /// A reply to a sign request is structured as:
+    ///
+    /// byte SSH_AGENT_SIGN_RESPONSE
+    /// string signature blob
+    pub fn encode(&self) -> Result<ReplyFrame, ssh_encoding::Error> {
+        Ok(ReplyFrame::new(ReplyType::SSH_AGENT_SIGN_RESPONSE, {
+            let mut reply_payload = Vec::new();
+            self.0.encode().unwrap().encode(&mut reply_payload)?;
+            reply_payload
+        }))
     }
 }
 
@@ -73,34 +120,13 @@ impl AgentFailure {
     }
 }
 
-impl TryFrom<AgentFailure> for SshReplyFrame {
+impl TryFrom<AgentFailure> for ReplyFrame {
     type Error = ssh_encoding::Error;
 
     fn try_from(_value: AgentFailure) -> Result<Self, Self::Error> {
-        Ok(SshReplyFrame::new(
-            AgentReply::SSH_AGENT_EXTENSION_FAILURE,
+        Ok(ReplyFrame::new(
+            ReplyType::SSH_AGENT_EXTENSION_FAILURE,
             Vec::new(),
         ))
-    }
-}
-
-pub struct SshReplyFrame {
-    raw_frame: Vec<u8>,
-}
-
-impl SshReplyFrame {
-    pub fn new(reply: AgentReply, payload: Vec<u8>) -> Self {
-        let mut raw_frame = Vec::new();
-        Into::<u8>::into(reply)
-            .encode(&mut raw_frame)
-            .expect("Encoding into Vec cannot fail");
-        raw_frame.extend_from_slice(&payload);
-        Self { raw_frame }
-    }
-}
-
-impl Into<Vec<u8>> for &SshReplyFrame {
-    fn into(self) -> Vec<u8> {
-        self.raw_frame.clone()
     }
 }
