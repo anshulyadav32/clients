@@ -1,24 +1,34 @@
-use std::io::Read;
-
 use byteorder::ReadBytesExt;
 use bytes::{Buf, Bytes};
-use futures::AsyncReadExt;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use ssh_encoding::Reader;
 
 use crate::ssh_agent::agent::agent::SshPublicKey;
 
+/// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-protocol-messages`
+/// The different types of requests that a client can send to the SSH agent.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive, Default)]
 #[repr(u8)]
-pub enum ClientRequest {
+pub enum RequestType {
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-requesting-a-list-of-keys`
+    /// Request the list of keys the agent is holding
     SSH_AGENTC_REQUEST_IDENTITIES = 11,
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-private-key-operations`
+    /// Sign an authentication request or SSHSIG request
     SSH_AGENTC_SIGN_REQUEST = 13,
+    /// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-extension-mechanism`
+    /// Handle vendor specific extensions such as session binding
     SSH_AGENTC_EXTENSION = 27,
+    /// An invalid request
     #[default]
     SSH_AGENTC_INVALID = 0,
 }
 
+/// `https://www.ietf.org/archive/id/draft-miller-ssh-agent-11.html#name-signature-flags`
+///
+/// There are currently two flags defined which control which signature method
+/// are used for RSA. These have no effect on other key types. If neither of these is defined,
+/// RSA is used with SHA1, however this is deprecated and should not be used.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
@@ -28,34 +38,38 @@ pub enum SshSignFlags {
 }
 
 #[derive(Debug)]
-pub(crate) enum AgentRequest {
+pub(crate) enum Request {
     IdentitiesRequest,
     SignRequest(SshSignRequest),
 }
 
-impl TryFrom<Vec<u8>> for AgentRequest {
+impl TryFrom<Vec<u8>> for Request {
     type Error = anyhow::Error;
 
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        if value.is_empty() {
+    // A protocol message consists of
+    // uint32 length
+    // byte type
+    // byte[length-1] contents
+    //
+    // The length is already stripped of in the `async_stream_wrapper::read_message`, so
+    // the message is just type|contents.
+    fn try_from(message: Vec<u8>) -> Result<Self, Self::Error> {
+        if message.is_empty() {
             return Err(anyhow::anyhow!("Empty request"));
         }
 
-        let request_type = ClientRequest::try_from_primitive(value[0])
+        let r#type = RequestType::try_from_primitive(message[0])
             .map_err(|_| anyhow::anyhow!("Failed to parse request type"))?;
-        let request_body = value[1..].to_vec();
+        let contents = message[1..].to_vec();
 
-        match request_type {
-            ClientRequest::SSH_AGENTC_REQUEST_IDENTITIES => Ok(AgentRequest::IdentitiesRequest),
-            ClientRequest::SSH_AGENTC_SIGN_REQUEST => {
-                let sign_request = SshSignRequest::try_from(request_body.as_slice())
+        match r#type {
+            RequestType::SSH_AGENTC_REQUEST_IDENTITIES => Ok(Request::IdentitiesRequest),
+            RequestType::SSH_AGENTC_SIGN_REQUEST => {
+                let sign_request = SshSignRequest::try_from(contents.as_slice())
                     .map_err(|e| anyhow::anyhow!("Failed to parse sign request: {e}"))?;
-                Ok(AgentRequest::SignRequest(sign_request))
+                Ok(Request::SignRequest(sign_request))
             }
-            _ => Err(anyhow::anyhow!(
-                "Unsupported request type: {:?}",
-                request_type
-            )),
+            _ => Err(anyhow::anyhow!("Unsupported request type: {:?}", r#type)),
         }
     }
 }

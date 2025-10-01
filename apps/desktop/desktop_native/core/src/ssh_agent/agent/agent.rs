@@ -4,7 +4,7 @@ use rsa::signature::SignerMut;
 use ssh_encoding::Encode;
 use ssh_key::{
     private::{Ed25519Keypair, RsaKeypair},
-    PublicKey, Signature, SshSig,
+    Signature,
 };
 use std::fmt::Debug;
 

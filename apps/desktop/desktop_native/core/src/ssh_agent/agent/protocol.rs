@@ -11,7 +11,7 @@ use crate::ssh_agent::{
         async_stream_wrapper::AsyncStreamWrapper,
         connection::ConnectionInfo,
         replies::{AgentFailure, AgentIdentitiesReply, AgentSignReply},
-        requests::{AgentRequest, SshSignFlags},
+        requests::{Request, SshSignFlags},
     },
     peerinfo::models::PeerInfo,
 };
@@ -53,7 +53,7 @@ async fn handle_connection(
             "[SSH Agent Connection {}] Waiting for request",
             connection.id()
         );
-        let request = AgentRequest::try_from(stream.read_message().await?);
+        let request = Request::try_from(stream.read_message().await?);
         let Ok(request) = request else {
             println!(
                 "[SSH Agent Connection {}] Failed to parse request with error {}",
@@ -68,7 +68,7 @@ async fn handle_connection(
         };
 
         let response = match request {
-            AgentRequest::IdentitiesRequest => {
+            Request::IdentitiesRequest => {
                 println!(
                     "[SSH Agent Connection {}] Received IdentitiesRequest",
                     connection.id()
@@ -77,7 +77,7 @@ async fn handle_connection(
                     .encode()
                     .map_err(|e| anyhow::anyhow!("Failed to encode identities reply: {e}"))
             }
-            AgentRequest::SignRequest(sign_request) => {
+            Request::SignRequest(sign_request) => {
                 println!(
                     "[SSH Agent Connection {}] Received SignRequest {:?}",
                     connection.id(),
