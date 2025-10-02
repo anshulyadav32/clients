@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "",
   "scripts": {
-    "build": "napi build --platform --no-js",
+    "build": "napi build --use-napi-cross --platform --no-js",
     "test": "cargo test"
   },
   "author": "",
